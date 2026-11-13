@@ -1,6 +1,6 @@
 {
-  "name": "Quincena",
-  "short_name": "Quincena",
+  "name": "Ceop",
+  "short_name": "Ceop",
   "description": "Planificador personal de quincenas, tasas y ahorro",
   "start_url": "./",
   "scope": "./",

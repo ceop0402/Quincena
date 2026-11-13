@@ -6,11 +6,11 @@
 <meta name="theme-color" content="#173B66">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Quincena">
+<meta name="apple-mobile-web-app-title" content="Ceop">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-64.png" type="image/png">
 <link rel="apple-touch-icon" href="icon-180.png">
-<title>Quincena</title>
+<title>Ceop</title>
 <style>
 :root{
   --bg:#EAEFF5; --surface:#FFFFFF; --sunk:#DDE5EF; --ink:#13253A; --muted:#5A6B7D; --line:#CBD6E3;
@@ -218,6 +218,18 @@ svg.chart g.col{cursor:pointer}
 .menu .t span{display:block;font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .menu .chev{color:var(--muted)}
 .gasto .icon-btn.del{color:var(--neg)}
+.qcal{background:var(--sunk);border-radius:var(--r-md);padding:10px;margin:10px 0 4px}
+.qcal .qhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.qcal .qhead button{background:var(--surface);border:0;border-radius:50%;width:38px;height:38px;font-size:1.1rem}
+.qcal .qhead b{font-size:.92rem;text-align:center;flex:1}
+.qcal .qhead small{display:block;font-weight:400;color:var(--muted);font-size:.78rem}
+.qcal .wd,.qcal .qd{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
+.qcal .wd span{font-size:.7rem;color:var(--muted);padding:2px 0}
+.qcal .qd button{height:40px;border:0;border-radius:10px;background:var(--surface);font-size:.92rem}
+.qcal .qd button.today{box-shadow:inset 0 0 0 2px var(--save)}
+.qcal .qd button.fut{opacity:.55}
+.qcal .qd button[aria-pressed=true]{background:var(--ink);color:var(--bg);opacity:1}
+.qcal .hoy{background:none;border:0;color:var(--res);font-weight:600;font-size:.85rem;padding:6px 0 0}
 </style>
 </head>
 <body>
@@ -379,7 +391,7 @@ function render(){nav();const app=document.getElementById("app");
   document.getElementById("fab").classList.toggle("hidden",(fresh&&view!=="ajustes")||view==="ajustes");
   if(fresh&&view!=="ajustes"){app.innerHTML=welcome();bind();return;}
   app.innerHTML={inicio:vInicio,mes:vMes,metas:vMetas,proy:vProy,ajustes:vAjustes}[view](); bind();}
-function welcome(){return `<div class="hero"><div class="top brandrow"><img src="icon-192.png" alt=""><span>Quincena</span></div><div class="big">Hola</div><div class="sub">Tus datos se guardan solo en este teléfono.</div></div>
+function welcome(){return `<div class="hero"><div class="top brandrow"><img src="icon-192.png" alt=""><span>Ceop</span></div><div class="big">Hola</div><div class="sub">Tus datos se guardan solo en este teléfono.</div></div>
 <div class="panel lift"><h3>Para empezar</h3><p class="muted">Si tienes un archivo de respaldo (.json), impórtalo y la app queda lista con tus datos. Si no, configura tus ingresos y gastos desde Ajustes.</p>
 <label class="btn full">Importar respaldo<input type="file" accept="application/json,.json" id="impW" class="hidden"></label>
 <button class="btn ghost full" style="margin-top:10px" data-go="ajustes">Configurar desde cero</button></div>`;}
@@ -719,7 +731,7 @@ function vAjustes(){
    ${it("resp","💾","Respaldo",days==null?"Nunca has hecho uno":`Último hace ${days} ${days===1?"día":"días"}`)}
    ${it("pin","🔒","PIN",c.pinHash?"Activado":"Desactivado")}
   </div>
-  <p class="small muted" style="text-align:center;margin:14px 0">Quincena · versión 2.2</p>`;
+  <p class="small muted" style="text-align:center;margin:14px 0">Ceop · versión 2.3</p>`;
 }
 function gastoSheet(id){
   const x=id?S.gastos.find(g=>g.id===id):{id:uid(),concepto:"",tipo:"Fijo",q:1,monto:"",activo:true,desde:"",hasta:"",pm:false};
@@ -742,8 +754,9 @@ function gastoSheet(id){
 /* ================= registrar movimiento ================= */
 function rateFor(fecha){const R=compute();const q=R.rows.find(r=>fecha>=r.desde&&fecha<=r.hasta);return q?q.bcv:(+S.config.tasaBcvIni||0);}
 function frecuentes(clase){const seen=new Set(),out=[];for(const x of [...S.movs].reverse()){if(x.clase!==clase)continue;const k=[x.concepto,x.categoria,x.moneda,x.monto].join("|");if(seen.has(k))continue;seen.add(k);out.push(x);if(out.length>=6)break;}return out;}
+function defaultFecha(){if(view!=="mes")return todayStr();if(selDay)return selDay;const t=todayStr();if(selQ){const R=compute();const r=R.rows.find(r=>r.key===selQ);if(r&&!(t>=r.desde&&t<=r.hasta))return r.desde;}return t;}
 function movSheet(id){
-  const x=id?{...S.movs.find(m=>m.id===id)}:{id:uid(),clase:"salida",fecha:todayStr(),concepto:"",categoria:"",moneda:"Bs",monto:"",de:"Kontigo",a:"Binance",recibido:""};
+  const x=id?{...S.movs.find(m=>m.id===id)}:{id:uid(),clase:"salida",fecha:defaultFecha(),concepto:"",categoria:"",moneda:"Bs",monto:"",de:"Kontigo",a:"Binance",recibido:""};
   let clase=x.clase, mon=x.moneda, cat=x.categoria, fecha=x.fecha;
   const yest=(()=>{const d=new Date();d.setDate(d.getDate()-1);return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;})();
   sheet(`<div class="head"><h3>${id?"Editar movimiento":"Registrar"}</h3><button data-close aria-label="Cerrar">✕</button></div>
@@ -758,12 +771,20 @@ function movSheet(id){
   <div id="catW"><div class="catgrid" id="cg" role="group" aria-label="Categoría"></div>
    <button class="linkbtn" id="cBtn">${x.concepto?"Concepto: "+esc(x.concepto):"+ Agregar concepto"}</button>
    <div class="field ${x.concepto?"":"hidden"}" id="cW"><input id="mC" value="${esc(x.concepto)}" placeholder="Concepto (opcional)"></div></div>
-  <div class="datechips" role="group" aria-label="Fecha"><button class="chip" data-dt="hoy">Hoy</button><button class="chip" data-dt="ayer">Ayer</button><input id="mF" type="date" value="${fecha}" aria-label="Otra fecha"></div>
+  <div class="qcal" aria-label="Día del movimiento"><div class="qhead"><button data-qn="-1" aria-label="Quincena anterior">‹</button><b id="qT"></b><button data-qn="1" aria-label="Quincena siguiente">›</button></div>
+   <div class="wd">${["L","M","M","J","V","S","D"].map(d=>`<span>${d}</span>`).join("")}</div><div class="qd" id="qD" role="group"></div>
+   <button class="hoy" id="qHoy">Ir a hoy</button><input id="mF" type="hidden" value="${fecha}"></div>
   <button class="btn full" id="mSave" style="margin-top:12px">Guardar</button>
   ${id?`<button class="btn danger full" id="mDel" style="margin-top:10px">Eliminar movimiento</button>`:""}`);
-  const syncDate=()=>{document.querySelectorAll("[data-dt]").forEach(b=>b.setAttribute("aria-pressed",(b.dataset.dt==="hoy"&&mF.value===todayStr())||(b.dataset.dt==="ayer"&&mF.value===yest)));};
-  document.querySelectorAll("[data-dt]").forEach(b=>b.onclick=()=>{mF.value=b.dataset.dt==="hoy"?todayStr():yest;syncDate();prev();});
-  mF.addEventListener("change",()=>{syncDate();prev();});
+  let vq=(()=>{const [y,m,d]=fecha.split("-").map(Number);return {y,m,q:d<=15?1:2};})();
+  const syncDate=()=>{const {y,m,q}=vq, ld=lastDay(y,m), d0=q===1?1:16, d1=q===1?15:ld, t=todayStr();
+    qT.innerHTML=`${q===1?"1ª":"2ª"} quincena de ${MESESL[m-1].toLowerCase()} ${y}<small>del ${d0} al ${d1}</small>`;
+    const off=(new Date(y,m-1,d0).getDay()+6)%7; let h="<span></span>".repeat(off);
+    for(let d=d0;d<=d1;d++){const ds=`${y}-${pad(m)}-${pad(d)}`;h+=`<button data-pd="${ds}" class="${ds===t?"today":""} ${ds>t?"fut":""}" aria-pressed="${ds===mF.value}" aria-label="${d} de ${MESESL[m-1]}">${d}</button>`;}
+    qD.innerHTML=h; qD.querySelectorAll("[data-pd]").forEach(b=>b.onclick=()=>{mF.value=b.dataset.pd;syncDate();prev();});
+    qHoy.classList.toggle("hidden",mF.value===t);};
+  document.querySelectorAll("[data-qn]").forEach(b=>b.onclick=()=>{let {y,m,q}=vq;const st=+b.dataset.qn;q+=st;if(q>2){q=1;m++;}if(q<1){q=2;m--;}if(m>12){m=1;y++;}if(m<1){m=12;y--;}vq={y,m,q};syncDate();});
+  qHoy.onclick=()=>{const t=todayStr();mF.value=t;const [y,m,d]=t.split("-").map(Number);vq={y,m,q:d<=15?1:2};syncDate();prev();};
   cBtn.onclick=()=>{cW.classList.remove("hidden");cBtn.classList.add("hidden");mC.focus();};
   const drawCats=()=>{const cats=clase==="salida"?CATS_OUT:CATS_IN; if(!cats.includes(cat))cat=cats[0];
     cg.innerHTML=cats.map(c=>`<button data-cat="${c}" aria-pressed="${c===cat}"><span class="e">${EMO[c]||"•"}</span>${c}</button>`).join("");
@@ -830,19 +851,19 @@ document.addEventListener("visibilitychange",()=>{if(document.hidden)hiddenAt=Da
 /* ================= respaldo ================= */
 async function exportJSON(){
   S.lastBackup=new Date().toISOString(); save();
-  const name=`quincena-respaldo-${todayStr()}.json`, blob=new Blob([JSON.stringify(S,null,2)],{type:"application/json"}), file=new File([blob],name,{type:"application/json"});
-  if(navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file],title:"Respaldo Quincena"});toast("Respaldo listo");render();return;}catch(e){if(e.name==="AbortError"){render();return;}}}
+  const name=`ceop-respaldo-${todayStr()}.json`, blob=new Blob([JSON.stringify(S,null,2)],{type:"application/json"}), file=new File([blob],name,{type:"application/json"});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file],title:"Respaldo Ceop"});toast("Respaldo listo");render();return;}catch(e){if(e.name==="AbortError"){render();return;}}}
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();toast("Respaldo descargado");render();
 }
 function importJSON(f){if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d||!d.config||!Array.isArray(d.gastos))throw 0;
   const go=()=>{S=merge(d);save();homeQ=null;curMonth=null;view="inicio";render();toast("Respaldo importado");};
-  if(S.gastos.length||S.movs.length)askConfirm("Importar respaldo","Esto reemplaza todos los datos del teléfono por los del respaldo, incluidos los movimientos que registraste.","Reemplazar mis datos",go); else go();}catch(e){toast("Ese archivo no es un respaldo válido de Quincena");}};r.readAsText(f);}
+  if(S.gastos.length||S.movs.length)askConfirm("Importar respaldo","Esto reemplaza todos los datos del teléfono por los del respaldo, incluidos los movimientos que registraste.","Reemplazar mis datos",go); else go();}catch(e){toast("Ese archivo no es un respaldo válido de Ceop");}};r.readAsText(f);}
 function exportCSV(){
   const R=compute(); const rows=[["Fecha","Tipo","Categoría","Concepto","Moneda","Monto","Equivalente $","Desde","Hacia","Llegó"]];
   for(const q of R.rows) for(const x of q.ms){const eq=x.moneda==="Bs"?(q.bcv>0?x.monto/q.bcv:0):+x.monto;
     rows.push([x.fecha,{salida:"Salida",ingreso:"Ingreso extra",transferencia:"Entre cuentas"}[x.clase],x.categoria,x.concepto,x.moneda,String(x.monto).replace(".",","),eq.toFixed(2).replace(".",","),x.de||"",x.a||"",x.recibido?String(x.recibido).replace(".",","):""]);}
   const csv="\ufeff"+rows.map(r=>r.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(";")).join("\n");
-  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download=`quincena-movimientos-${todayStr()}.csv`;document.body.appendChild(a);a.click();a.remove();toast("Movimientos exportados");
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download=`ceop-movimientos-${todayStr()}.csv`;document.body.appendChild(a);a.click();a.remove();toast("Movimientos exportados");
 }
 
 /* ================= eventos ================= */
