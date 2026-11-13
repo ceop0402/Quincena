@@ -233,7 +233,7 @@ svg.chart g.col{cursor:pointer}
 .curtog{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));right:max(12px,calc(50% - 268px));z-index:12;display:flex;background:rgba(255,255,255,.16);border-radius:999px;padding:3px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
 .curtog button{border:0;background:transparent;color:#fff;font-weight:700;font-size:.85rem;padding:6px 12px;border-radius:999px;min-width:44px}
 .curtog button[aria-pressed=true]{background:#fff;color:#173B66}
-.hero .top,.left .lab,.mhead{padding-right:110px}
+.mhead{padding-right:110px}
 .mhead{display:flex;align-items:center;background:var(--brand);color:var(--brand-ink);margin:0 -16px;padding:14px 16px 30px;border-radius:0 0 28px 28px}
 .mhead button{background:rgba(255,255,255,.12);border:0;color:inherit;font-size:1.15rem;font-weight:700;padding:8px 14px;border-radius:12px}
 .qcards{display:grid;gap:10px;margin-top:-18px;position:relative}
@@ -274,9 +274,9 @@ const DEFAULT={
     capBinance:0,capKontigo:0,capFacebank:0,mesesReserva:3,pctCapReserva:0.3,pctReserva:0.2,presupuestoVar:0,mesesPromedio:3,pinHash:""},
   gastos:[],metas:[],topes:{},quincenas:{},movs:[],lastBackup:null
 };
-const CATS_OUT=["Comida","Salud","Transporte","Hogar","Familia","Sasha","Ocio","Ropa","Regalos","Imprevistos","Otros"];
+const CATS_OUT=["Comida","Salud","Transporte","Hogar","Familia","Sasha","Ocio","Ropa","Regalos","Imprevistos","Venta de USDT","Otros"];
 const CATS_IN=["Venta de perfumes","Trabajo freelance","Bono","Reembolso","Regalo","Rendimiento","Otro"];
-const EMO={"Comida":"🍔","Salud":"💊","Transporte":"🚌","Hogar":"🏠","Familia":"👪","Sasha":"🐶","Ocio":"🎮","Ropa":"👕","Regalos":"🎁","Imprevistos":"⚠️","Otros":"📦","Venta de perfumes":"🧴","Trabajo freelance":"💻","Bono":"⭐","Reembolso":"↩️","Regalo":"🎁","Rendimiento":"📈","Otro":"💵","Transferencia":"⇄"};
+const EMO={"Venta de USDT":"💸","Comida":"🍔","Salud":"💊","Transporte":"🚌","Hogar":"🏠","Familia":"👪","Sasha":"🐶","Ocio":"🎮","Ropa":"👕","Regalos":"🎁","Imprevistos":"⚠️","Otros":"📦","Venta de perfumes":"🧴","Trabajo freelance":"💻","Bono":"⭐","Reembolso":"↩️","Regalo":"🎁","Rendimiento":"📈","Otro":"💵","Transferencia":"⇄"};
 const CUENTAS=["Binance","Kontigo","Facebank","Bs (banco)"];
 const MESES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
 const MESESL=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
@@ -302,10 +302,11 @@ const nf=new Intl.NumberFormat("es-VE",{minimumFractionDigits:2,maximumFractionD
 const nf0=new Intl.NumberFormat("es-VE",{maximumFractionDigits:0});
 let CUR=(()=>{try{return localStorage.getItem("ceop.cur")||"USD";}catch(e){return "USD";}})(), RATE=0;
 const $usd=v=>{const n=Number(v)||0; return (n<-0.004?"−$":"$")+nf.format(Math.abs(n));};
-const $m=v=>{if(CUR!=="VES"||!(RATE>0))return $usd(v); const n=(Number(v)||0)*RATE; return (n<-0.004?"−Bs ":"Bs ")+nf.format(Math.abs(n));};
-const $alt=v=>CUR==="VES"?$usd(v):"Bs "+nf.format((Number(v)||0)*RATE);
+let CURV="USD";
+const $m=v=>{if(CURV!=="VES"||!(RATE>0))return $usd(v); const n=(Number(v)||0)*RATE; return (n<-0.004?"−Bs ":"Bs ")+nf.format(Math.abs(n));};
+const $alt=v=>CURV==="VES"?$usd(v):"Bs "+nf.format((Number(v)||0)*RATE);
 function withRate(r,fn){const o=RATE;if(r>0)RATE=r;try{return fn();}finally{RATE=o;}}
-const axisL=t=>{const v=CUR==="VES"&&RATE>0?t*RATE:t;const p=CUR==="VES"&&RATE>0?"":"";return v>=1e6?nf.format(v/1e6).replace(/,0+$/,"").replace(/(,\d)\d+/,"$1")+"M":v>=1000?nf.format(v/1000).replace(/,0+$/,"").replace(/(,\d)\d+/,"$1")+"k":nf0.format(v);};
+const axisL=t=>{const v=CURV==="VES"&&RATE>0?t*RATE:t;const p=CUR==="VES"&&RATE>0?"":"";return v>=1e6?nf.format(v/1e6).replace(/,0+$/,"").replace(/(,\d)\d+/,"$1")+"M":v>=1000?nf.format(v/1000).replace(/,0+$/,"").replace(/(,\d)\d+/,"$1")+"k":nf0.format(v);};
 const $bs=v=>"Bs "+nf.format(Number(v)||0);
 const pct=v=>nf.format((Number(v)||0)*100).replace(/,00$/,"")+"%";
 const numIn=v=>{if(v===""||v==null)return 0; const s=String(v).trim(); const n=s.includes(",")?parseFloat(s.replace(/\./g,"").replace(",",".")):parseFloat(s); return isNaN(n)?0:n;};
@@ -353,7 +354,7 @@ function compute(opt={}){
   let pB=+c.tasaBcvIni||0, pP=+c.tasaCompraIni||0;
   for(const q of qs){const d=S.quincenas[q.key]||{}; q.bcv=+d.bcv>0?+d.bcv:pB; q.buy=+d.compra>0?+d.compra:pP; pB=q.bcv; pP=q.buy; q.d=d; q.tasaCargada=+d.bcv>0||+d.compra>0;}
   const pmR=+c.comisionPM||0, pmF=x=>(x.clase==="salida"&&x.pm&&x.moneda!=="USDT")?1+pmR:1;
-  const toBcv=(x,q)=>(x.moneda==="Bs"?(q.bcv>0?(+x.monto||0)/q.bcv:0):x.moneda==="$"?(+x.monto||0):0)*pmF(x);
+  const toBcv=(x,q)=>{const t=+x.tasa>0?+x.tasa:q.bcv;return (x.moneda==="Bs"?(t>0?(+x.monto||0)/t:0):x.moneda==="$"?(+x.monto||0):0)*pmF(x);};
   const toUs=x=>x.moneda==="USDT"?(+x.monto||0):0;
   const eqUsd=(x,q)=>x.moneda==="USDT"?(+x.monto||0):toBcv(x,q);
   for(const q of qs){q.ms=S.movs.filter(x=>x.fecha>=q.desde&&x.fecha<=q.hasta); q.salTot=q.ms.filter(x=>x.clase==="salida").reduce((a,x)=>a+eqUsd(x,q),0);}
@@ -379,7 +380,9 @@ function compute(opt={}){
     const d=q.d, loss=q.buy>0&&q.bcv>0?1-q.bcv/q.buy:0;
     const sueldo=(+c.sueldoBase||0)*(1+(+c.iva||0));
     const agui=(c.aguinaldoFecha&&c.aguinaldoFecha>=q.desde&&c.aguinaldoFecha<=q.hasta)?(+c.aguinaldo||0):0;
-    const gList=S.gastos.filter(g=>g.activo&&+g.q===q.q&&(!g.desde||g.desde<=q.hasta)&&(!g.hasta||g.hasta>=q.hasta)).map(g=>({concepto:g.concepto,monto:+g.monto||0,pm:g.pm,com:g.pm?(+g.monto||0)*(+c.comisionPM||0):0}));
+    const skip=(S.quincenas[q.key]||{}).skip||[];
+    q.skipped=S.gastos.filter(g=>g.activo&&+g.q===q.q&&skip.includes(g.id));
+    const gList=S.gastos.filter(g=>g.activo&&+g.q===q.q&&!skip.includes(g.id)&&(!g.desde||g.desde<=q.hasta)&&(!g.hasta||g.hasta>=q.hasta)).map(g=>({id:g.id,concepto:g.concepto,monto:+g.monto||0,pm:g.pm,com:g.pm?(+g.monto||0)*(+c.comisionPM||0):0}));
     G.forEach(g=>{if(g.buyDate&&g.buyDate<=q.hasta&&+g.gastoPost>0)gList.push({concepto:`${g.nombre} (después de comprar)`,monto:(+g.gastoPost)/2,pm:false,post:true});});
     const gastos=gList.reduce((a,g)=>a+g.monto,0), com=gList.filter(g=>g.pm).reduce((a,g)=>a+g.monto,0)*(+c.comisionPM||0);
     const ing=q.ms.filter(x=>x.clase==="ingreso"), sal=q.ms.filter(x=>x.clase==="salida"), tr=q.ms.filter(x=>x.clase==="transferencia");
@@ -429,7 +432,7 @@ document.getElementById("fab").addEventListener("click",()=>movSheet());
 function curRate(){const R=compute();const i=curIdx(R.rows);return R.rows[i].bcv;}
 function syncCur(){document.querySelectorAll("#curtog [data-cur]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.cur===CUR));}
 document.getElementById("curtog").addEventListener("click",e=>{const b=e.target.closest("[data-cur]");if(!b)return;CUR=b.dataset.cur;try{localStorage.setItem("ceop.cur",CUR);}catch(x){}buzz();const y=window.scrollY;render();window.scrollTo(0,y);});
-function render(){RATE=curRate();syncCur();document.body.classList.toggle("ves",CUR==="VES");nav();const app=document.getElementById("app");
+function render(){RATE=curRate();CURV=view==="mes"?CUR:"USD";syncCur();document.body.classList.toggle("ves",CURV==="VES");document.getElementById("curtog").classList.toggle("hidden",view!=="mes");nav();const app=document.getElementById("app");
   const fresh=!S.config.sueldoBase&&!S.gastos.length&&!S.movs.length;
   document.getElementById("fab").classList.toggle("hidden",(fresh&&view!=="ajustes")||view==="ajustes");
   if(fresh&&view!=="ajustes"){app.innerHTML=welcome();bind();return;}
@@ -470,17 +473,16 @@ function vInicio(){
   const recent=S.movs.filter(x=>x.fecha.slice(0,7)===M.key).sort((a,b)=>b.fecha.localeCompare(a.fecha)||0).slice(0,4);
   const realDif=M.capReal?M.capReal-M.tot:null;
   return `${heroH}
-  <div class="mini lift"><div><b>${$m(M.ing,false)}</b><span>Ingresos del mes</span></div><div><b class="${M.neto<0?"neg":""}">${$m(M.neto,false)}</b><span>Ahorro neto · ${M.ing>0?Math.round(M.neto/M.ing*100):0}%</span></div><div><b>${$m(M.tot,false)}</b><span>Capital al cierre</span></div></div>
-  ${w}
-  ${recent.length?`<h2>Últimos movimientos</h2><div class="panel">${recent.map(movRow).join("")}<button class="btn ghost full" data-go="mes" style="margin-top:8px">Ver todo el mes</button></div>`:""}
-  ${topes.length?`<h2>Topes del mes</h2><div class="panel">${topesH}</div>`:""}
+  <div class="mini lift" style="grid-template-columns:1fr 1fr"><div><b>${$m(M.tot)}</b><span>Capital al cierre de ${MESES[M.m-1]}</span></div><div><b class="${M.tot-R.capIni<0?"neg":"pos"}">${$m(M.tot-R.capIni)}</b><span>Ahorrado desde ${fmtM(R.rows[0].y,R.rows[0].m)} · este mes ${$m(M.neto)}</span></div></div>
   <h2>A dónde va tu dinero</h2>
   <section class="panel flowbars">
-   ${fb("Gastos fijos",[[M.fijos,"var(--fix)"]],$m(M.fijos,false))}
-   ${fb("Gastos variables",[[M.varReal,"var(--var)"],[M.varEst,"var(--var)",1]],$m(M.varReal,false)+(M.varEst>0?` + ${$m(M.varEst,false)} por gastar`:""))}
-   ${fb("Pérdida por cambio",[[M.loss,"var(--lossbar)",1]],$m(M.loss,false))}
-   ${fb("Ahorro neto",[[Math.max(0,M.neto),"var(--save)"]],$m(M.neto,false))}
+   ${fb("Gastos fijos",[[M.fijos,"var(--fix)"]],$m(M.fijos))}
+   ${fb("Gastos variables",[[M.varReal,"var(--var)"],[M.varEst,"var(--var)",1]],$m(M.varReal)+(M.varEst>0?` + ${$m(M.varEst)} por gastar`:""))}
+   ${fb("Pérdida por cambio",[[M.loss,"var(--lossbar)",1]],$m(M.loss))}
+   ${fb("Ahorro neto",[[Math.max(0,M.neto),"var(--save)"]],$m(M.neto))}
   </section>
+  ${recent.length?`<h2>Últimos movimientos</h2><div class="panel">${recent.map(movRow).join("")}<button class="btn ghost full" data-go="mes" style="margin-top:8px">Ver todo el mes</button></div>`:""}
+  ${topes.length?`<h2>Topes del mes</h2><div class="panel">${topesH}</div>`:""}
   <h2>Ingresos y gastos, mes a mes</h2><div class="panel">${trendChart(R.months,mi)}</div>
   <h2>Esta quincena</h2>
   <section class="panel">
@@ -525,8 +527,11 @@ function vMes(){
      <div class="bar"><span style="width:${p*100}%;background:${p>.9?"var(--neg)":"var(--fix)"}"></span></div>
      <div class="ft"><span>Gastado ${$m(gas)}</span><span>de ${$m(ing)}</span></div>
      <div class="ft" style="margin-top:6px"><span>Toca para ver gastos y todo lo demás</span><span>›</span></div></button>`;});
+  const gasM=a.gastos+a.com+a.salBs+b.gastos+b.com+b.salBs, ingM=a.sueldo+a.agui+a.extraBs+b.sueldo+b.agui+b.extraBs;
   return `<div class="mhead"><button id="mPick" aria-label="Elegir mes">${MESESL[M.m-1]} ${M.y} ▾</button></div>
-  <div class="qcards">${card(a)}${card(b)}</div>
+  <div class="qcards"><div class="qcard" style="cursor:default"><div class="h"><b>Ingresos del mes</b></div><div class="big">${$m(ingM)}</div><div class="alt">${$alt(ingM)}</div>
+   <div class="ft" style="margin-top:8px"><span>Gastado ${$m(gasM)}</span><span>Te queda ${$m(ingM-gasM)}</span></div></div>
+  ${card(a)}${card(b)}</div>
   <h2>Total del mes</h2>
   <div class="panel"><ul class="lines">
    <li><span>Ingresos</span><span class="money">${$m(M.ing)}</span></li>
@@ -544,7 +549,7 @@ function qDetail(r,R){return withRate(r.bcv,()=>{
   return `<div class="dhead"><button class="back" data-closeq aria-label="Volver a ${MESESL[M.m-1]}">‹</button><h1>Quincena ${r.q} · ${MESESL[r.m-1]} ${r.y}<small>Cobro ${fmtDY(r.cobro)} · del ${fmtD(r.desde)} al ${fmtD(r.hasta)}</small></h1></div>
   <div class="panel lift">${qBox(r)}</div>
   <h2>Movimientos</h2>
-  <div class="panel">${list.length?list.map(movRow).join("")+`<p class="small muted" style="margin:8px 0 0">Toca para editar. Desliza a la izquierda para borrar.</p>`:`<div class="empty">Sin movimientos en esta quincena. Regístralos con el botón +.</div>`}</div>
+  <div class="panel">${list.length?list.map(movRow).join("")+`<p class="small muted" style="margin:8px 0 0">Toca para editar. 🗑 para eliminar.</p>`:`<div class="empty">Sin movimientos en esta quincena. Regístralos con el botón +.</div>`}</div>
   ${qPanel(r)}`;});}
 function monthPicker(){
   const R=compute(); const years={}; R.months.forEach((m,i)=>{(years[m.y]=years[m.y]||[]).push([m,i]);});
@@ -566,8 +571,10 @@ function qPanel(r){
   const d=S.quincenas[r.key]||{}, dif=r.capReal?r.capReal-r.tot:null;
   return withRate(r.bcv,()=>`
   <h2>Gastos fijos</h2>
-  <div class="panel"><ul class="lines">${r.gList.map(g=>`<li><span>${esc(g.concepto)}${g.com?`<br><span class="pmc">📲 comisión pago móvil ${$m(g.com)}</span>`:""}</span><span class="money">${$m(g.monto+(g.com||0))}</span></li>`).join("")||`<li><span class="muted">Sin gastos fijos en esta quincena</span></li>`}
-   <li class="total"><span>Total${r.com>0?` (incluye ${$m(r.com)} de comisiones)`:""}</span><span class="money">${$m(r.gastos+r.com)}</span></li></ul></div>
+  <div class="panel"><ul class="lines">${r.gList.map(g=>`<li style="align-items:center"><span style="flex:1">${esc(g.concepto)}${g.com?`<br><span class="pmc">📲 comisión pago móvil ${$m(g.com)}</span>`:""}</span><span class="money">${$m(g.monto+(g.com||0))}</span>${g.id?`<button class="icon-btn del" data-skip="${r.key}|${g.id}" aria-label="Quitar ${esc(g.concepto)} de esta quincena" style="color:var(--neg)">🗑</button>`:""}</li>`).join("")||`<li><span class="muted">Sin gastos fijos en esta quincena</span></li>`}
+   <li class="total"><span>Total${r.com>0?` (incluye ${$m(r.com)} de comisiones)`:""}</span><span class="money">${$m(r.gastos+r.com)}</span></li></ul>
+   ${r.skipped.length?`<p class="small muted" style="margin:8px 0 4px">Quitados solo de esta quincena:</p>${r.skipped.map(g=>`<div class="row small" style="padding:4px 0"><span style="text-decoration:line-through">${esc(g.concepto)} ${$m(g.monto)}</span><button class="linkbtn" data-unskip="${r.key}|${g.id}">Restaurar</button></div>`).join("")}`:""}
+   <p class="small muted" style="margin:8px 0 0">🗑 lo quita solo de esta quincena. Para borrarlo de todos los meses: Ajustes → Gastos fijos.</p></div>
   <h2>Cobro y conversión</h2>
   <div class="panel">
    <div class="field"><label for="cob-${r.key}">Fecha de cobro</label><input type="date" id="cob-${r.key}" data-q="${r.key}" data-f="cobro" value="${r.cobro}"></div>
@@ -604,7 +611,7 @@ function movRow(x){
   const title=x.clase==="transferencia"?`${esc(x.de)} → ${esc(x.a)}`:esc(x.concepto||x.categoria);
   const sub=x.clase==="transferencia"?`${fmtD(x.fecha)} · costo ${$m(Math.max(0,x.monto-x.recibido))}`:`${fmtD(x.fecha)} · ${esc(x.categoria)}${x.pm&&x.clase==="salida"&&x.moneda!=="USDT"?" · 📲 +"+pct(S.config.comisionPM||0):""}`;
   return `<div class="mov tap" data-edit="${x.id}" role="button" tabindex="0" aria-label="Editar ${title}"><div class="dot ${k}"><span class="e">${EMO[x.categoria]||sign}</span></div><div class="txt"><b>${title}</b><span class="small muted">${sub}</span></div>
-  <span class="money ${k==="out"?"neg":k==="in"?"pos":""}">${sign}${amt}</span></div>`;}
+  <span class="money ${k==="out"?"neg":k==="in"?"pos":""}">${sign}${amt}</span><button class="icon-btn del" data-mdel="${x.id}" aria-label="Eliminar ${title}" style="color:var(--neg)">🗑</button></div>`;}
 /* ================= metas ================= */
 function vMetas(){
   const R=compute(), ci=curIdx(R.rows), M=R.months[Math.floor(ci/2)], tp=S.metas.filter(g=>!g.comprada).reduce((a,g)=>a+(+g.pct||0),0);
@@ -743,7 +750,7 @@ function fijosSheet(){
 }
 function topesSheet(){
   sheet(`<div class="head"><h3>Topes por categoría</h3><button data-close aria-label="Cerrar">✕</button></div><p class="small muted" style="margin-top:0">Tope mensual en $. Te aviso al llegar al 80% y si te pasas. Vacío = sin tope.</p>
-   <div class="grid2">${CATS_OUT.map(k=>`<div class="field"><label for="tp-${k}">${EMO[k]} ${k}</label><input inputmode="decimal" id="tp-${k}" data-tope="${k}" value="${S.topes[k]||""}"></div>`).join("")}</div>
+   <div class="grid2">${CATS_OUT.filter(k=>k!=="Venta de USDT").map(k=>`<div class="field"><label for="tp-${k}">${EMO[k]} ${k}</label><input inputmode="decimal" id="tp-${k}" data-tope="${k}" value="${S.topes[k]||""}"></div>`).join("")}</div>
    <button class="btn full" data-close style="margin-top:14px">Listo</button>`);
   document.querySelectorAll("#scrim [data-tope]").forEach(i=>i.addEventListener("change",()=>{const v=numIn(i.value);if(v>0)S.topes[i.dataset.tope]=v;else delete S.topes[i.dataset.tope];save();render();toast("Guardado");}));
 }
@@ -779,14 +786,13 @@ function vAjustes(){
   <div class="menu">
    ${it("c4","🛡️","Reserva",`${c.mesesReserva} meses de gastos · ${pct(c.pctReserva)} del ahorro`)}
    ${it("c3","🏦","Capital inicial",$m((+c.capBinance||0)+(+c.capKontigo||0)+(+c.capFacebank||0),false))}
-   ${it("c2","💱","Tasas iniciales",`BCV ${nf.format(c.tasaBcvIni||0)} · compra ${nf.format(c.tasaCompraIni||0)}`)}
    ${it("c5","📅","Período",`Desde ${c.inicio||"—"}`)}
   </div>
   <div class="menu">
-   ${it("resp","💾","Respaldo",days==null?"Nunca has hecho uno":`Último hace ${days} ${days===1?"día":"días"}`)}
+   ${it("resp","💾","Respaldo",days==null?"⚠️ Nunca has hecho uno":`${days>14?"⚠️ ":""}Último hace ${days} ${days===1?"día":"días"}`)}
    ${it("pin","🔒","PIN",c.pinHash?"Activado":"Desactivado")}
   </div>
-  <p class="small muted" style="text-align:center;margin:14px 0">Ceop · versión 2.5</p>`;
+  <p class="small muted" style="text-align:center;margin:14px 0">Ceop · versión 2.6</p>`;
 }
 function gastoSheet(id){
   const x=id?S.gastos.find(g=>g.id===id):{id:uid(),concepto:"",tipo:"Fijo",q:1,monto:"",activo:true,desde:"",hasta:"",pm:false};
@@ -819,6 +825,7 @@ function movSheet(id){
   <div id="freq"></div>
   <div class="field"><label id="mML" for="mM">Monto</label><input id="mM" inputmode="decimal" value="${x.monto}" style="font-size:1.8rem;font-weight:750;padding:12px 14px"></div>
   <div class="chips" role="group" aria-label="Moneda" id="monW">${["Bs","$","USDT"].map(c=>`<button class="chip" data-mo="${c}" aria-pressed="${mon===c}">${c}</button>`).join("")}</div>
+  <div class="field" id="tasaW"><label for="mT" id="mTL">Tasa a la que se hizo (Bs por $)</label><input id="mT" inputmode="decimal" value="${x.tasa||""}"></div>
   <button class="chip" id="pmB" aria-pressed="false" style="margin:2px 0 6px">📲 Pagado por pago móvil (+${pct(S.config.comisionPM||0)})</button>
   <div class="preview" id="pv"></div>
   <div id="trW"><div class="grid2"><div class="field"><label>Desde</label><select id="mDe">${CUENTAS.map(c=>`<option ${x.de===c?"selected":""}>${c}</option>`).join("")}</select></div>
@@ -836,7 +843,7 @@ function movSheet(id){
   cBtn.onclick=()=>{cW.classList.remove("hidden");cBtn.classList.add("hidden");mC.focus();};
   const drawCats=()=>{const cats=clase==="salida"?CATS_OUT:CATS_IN; if(!cats.includes(cat))cat=cats[0];
     cg.innerHTML=cats.map(c=>`<button data-cat="${c}" aria-pressed="${c===cat}"><span class="e">${EMO[c]||"•"}</span>${c}</button>`).join("");
-    cg.querySelectorAll("[data-cat]").forEach(b=>b.onclick=()=>{cat=b.dataset.cat;cg.querySelectorAll("[data-cat]").forEach(z=>z.setAttribute("aria-pressed",z===b));prev();});};
+    cg.querySelectorAll("[data-cat]").forEach(b=>b.onclick=()=>{cat=b.dataset.cat;cg.querySelectorAll("[data-cat]").forEach(z=>z.setAttribute("aria-pressed",z===b));if(cat==="Venta de USDT"&&mon!=="USDT"){mon="USDT";document.querySelectorAll("[data-mo]").forEach(z=>z.setAttribute("aria-pressed",z.dataset.mo===mon));}syncPm();prev();});};
   const sync=()=>{
     const isT=clase==="transferencia";
     trW.classList.toggle("hidden",!isT); catW.classList.toggle("hidden",isT); monW.classList.toggle("hidden",isT);
@@ -848,12 +855,15 @@ function movSheet(id){
       document.querySelectorAll("[data-mo]").forEach(z=>z.setAttribute("aria-pressed",z.dataset.mo===mon));drawCats();prev();});
     syncDate(); prev();
   };
-  function syncPm(){const show=clase==="salida"&&mon!=="USDT";pmB.classList.toggle("hidden",!show);pmB.setAttribute("aria-pressed",pm&&show);}
+  function syncPm(){const show=clase==="salida"&&mon!=="USDT";pmB.classList.toggle("hidden",!show);pmB.setAttribute("aria-pressed",pm&&show);
+    const venta=clase==="salida"&&cat==="Venta de USDT"; tasaW.classList.toggle("hidden",!(mon==="Bs"||venta)||clase==="transferencia");
+    mTL.textContent=venta?"Tasa a la que vendiste (Bs por USDT)":"Tasa a la que se hizo (Bs por $)"; mT.placeholder=venta?"Opcional":nf.format(rateFor(mF.value));}
   pmB.onclick=()=>{pm=!pm;syncPm();prev();};
   const prev=()=>{const v=numIn(mM.value);
     if(clase==="transferencia"){const r=numIn(mR.value);pv.innerHTML=v&&r?`Costo de la transferencia: <b>${$m(Math.max(0,v-r))}</b> (${pct(v>0?Math.max(0,v-r)/v:0)})`:"Solo cuenta como gasto la diferencia entre lo que enviaste y lo que llegó.";return;}
     const usePm=pm&&clase==="salida"&&mon!=="USDT", r=+S.config.comisionPM||0;
-    if(mon==="Bs"){const t=rateFor(mF.value);pv.innerHTML=v?`≈ <b>${$m(t>0?v/t:0)}</b> a tasa BCV ${nf.format(t)}${usePm?`<br>Comisión pago móvil: <b>${$bs(v*r)}</b> (${$m(t>0?v*r/t:0)}) · total <b>${$bs(v*(1+r))}</b>`:""}`:`Se convierte con la tasa BCV de esa quincena (${nf.format(t)}).`;}
+    if(clase==="salida"&&cat==="Venta de USDT"){const tv=numIn(mT.value);pv.innerHTML=(v&&tv?`Recibiste ≈ <b>${$bs(v*tv)}</b>. `:"")+"Sale de tus ahorros en USDT y cuenta como gasto variable. Si registras la venta, no registres también en qué gastaste esos Bs, o se contará dos veces.";return;}
+    if(mon==="Bs"){const t=numIn(mT.value)>0?numIn(mT.value):rateFor(mF.value);pv.innerHTML=v?`≈ <b>${$usd(t>0?v/t:0)}</b> a tasa ${nf.format(t)}${usePm?`<br>Comisión pago móvil: <b>${$bs(v*r)}</b> (${$m(t>0?v*r/t:0)}) · total <b>${$bs(v*(1+r))}</b>`:""}`:`Se convierte con la tasa BCV de esa quincena (${nf.format(t)}).`;}
     else if(mon==="$")pv.innerHTML=`Monto en dólares BCV.${usePm&&v?` Comisión pago móvil: <b>${$m(v*r)}</b> · total <b>${$m(v*(1+r))}</b>`:""}`;
     else pv.innerHTML=clase==="salida"?"Sale directo de tus ahorros en USDT.":"Entra directo a tu ahorro, sin pérdida por cambio.";
     if(clase==="salida"&&cat&&+S.topes[cat]>0&&v){const R=compute();const M=R.months.find(m=>m.key===mF.value.slice(0,7));if(M){const t=mon==="Bs"?rateFor(mF.value):1;const add=mon==="Bs"?(t>0?v/t:0):v;const o=id?S.movs.find(m=>m.id===id):null;const was=o&&o.categoria===cat&&o.fecha.slice(0,7)===mF.value.slice(0,7)?(o.moneda==="Bs"?o.monto/t:+o.monto):0;const sp=(M.cat[cat]||0)-was+add, cap=+S.topes[cat];
@@ -861,12 +871,12 @@ function movSheet(id){
   };
   document.querySelectorAll("[data-cl]").forEach(b=>b.onclick=()=>{clase=b.dataset.cl;if(clase!=="transferencia"&&mon==="USDT"&&!id)mon="Bs";document.querySelectorAll("[data-cl]").forEach(z=>z.setAttribute("aria-pressed",z===b));document.querySelectorAll("[data-mo]").forEach(z=>z.setAttribute("aria-pressed",z.dataset.mo===mon));cat="";sync();});
   document.querySelectorAll("[data-mo]").forEach(b=>b.onclick=()=>{mon=b.dataset.mo;document.querySelectorAll("[data-mo]").forEach(z=>z.setAttribute("aria-pressed",z===b));syncPm();prev();});
-  [mM,mR].forEach(e=>e.addEventListener("input",prev));
+  [mM,mR,mT].forEach(e=>e.addEventListener("input",prev));
   sync(); if(!id)setTimeout(()=>mM.focus(),250);
   mSave.onclick=()=>{
     const v={id:x.id,clase,fecha:mF.value,monto:numIn(mM.value),moneda:clase==="transferencia"?"USDT":mon};
     if(clase==="transferencia"){Object.assign(v,{de:mDe.value,a:mA.value,recibido:numIn(mR.value),categoria:"Transferencia",concepto:""});if(!v.recibido){toast("Escribe cuánto llegó");return;}if(v.de===v.a){toast("Elige dos cuentas distintas");return;}}
-    else{Object.assign(v,{categoria:cat,concepto:mC.value.trim()});if(clase==="salida"&&mon!=="USDT"){v.pm=pm;try{localStorage.setItem('ceop.pm',pm?'1':'0');}catch(e){}}}
+    else{Object.assign(v,{categoria:cat,concepto:mC.value.trim()});{const tt=numIn(mT.value);if(tt>0&&(mon==="Bs"||cat==="Venta de USDT"))v.tasa=tt;}if(clase==="salida"&&mon!=="USDT"){v.pm=pm;try{localStorage.setItem('ceop.pm',pm?'1':'0');}catch(e){}}}
     if(!v.monto){toast("Escribe el monto");mM.focus();return;} if(!v.fecha){toast("Elige la fecha");return;}
     const i=S.movs.findIndex(m=>m.id===x.id); if(i>=0)S.movs[i]=v; else S.movs.push(v); save();closeSheet();render();buzz();
     let msg=id?"Movimiento actualizado":clase==="salida"?"Salida registrada":clase==="ingreso"?"Ingreso registrado":"Transferencia registrada";
@@ -940,6 +950,10 @@ function bind(){
   on("[data-selq]",b=>b.onclick=()=>{selQ=b.dataset.selq;selDay=null;render();});
   on("[data-clrday]",b=>b.onclick=()=>{selDay=null;render();});
   on("#mPick",b=>b.onclick=monthPicker);
+  on("[data-mdel]",b=>b.onclick=e=>{e.stopPropagation();const x=S.movs.find(m=>m.id===b.dataset.mdel);if(x)removeWithUndo("movs",x.id,"Movimiento eliminado");});
+  on("[data-skip]",b=>b.onclick=()=>{const [k,id]=b.dataset.skip.split("|");S.quincenas[k]=S.quincenas[k]||{};const sk=S.quincenas[k].skip=S.quincenas[k].skip||[];if(!sk.includes(id))sk.push(id);save();const y=window.scrollY;render();window.scrollTo(0,y);buzz();
+    const g=S.gastos.find(z=>z.id===id);toast(`${g?g.concepto:"Gasto"} quitado de esta quincena`,()=>{S.quincenas[k].skip=S.quincenas[k].skip.filter(z=>z!==id);save();render();window.scrollTo(0,y);});});
+  on("[data-unskip]",b=>b.onclick=()=>{const [k,id]=b.dataset.unskip.split("|");S.quincenas[k].skip=(S.quincenas[k].skip||[]).filter(z=>z!==id);save();const y=window.scrollY;render();window.scrollTo(0,y);toast("Gasto restaurado");});
   on("[data-openq]",b=>b.onclick=()=>{openQ=b.dataset.openq;render();window.scrollTo(0,0);});
   on("[data-closeq]",b=>b.onclick=()=>{openQ=null;render();window.scrollTo(0,0);});
   on("[data-pi]",r=>r.onclick=()=>{projSel=+r.dataset.pi;const y=window.scrollY;render();window.scrollTo(0,y);});
