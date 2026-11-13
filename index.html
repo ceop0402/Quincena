@@ -353,9 +353,14 @@ function compute(opt={}){
   const c=S.config, qs=quincenas(), today=todayStr(), metaR=metaReserva();
   // tasas (arrastre)
   let pB=+c.tasaBcvIni||0, pP=+c.tasaCompraIni||0;
-  for(const q of qs){const d=S.quincenas[q.key]||{}; q.bcv=+d.bcv>0?+d.bcv:pB; q.buy=+d.compra>0?+d.compra:pP; pB=q.bcv; pP=q.buy; q.d=d; q.tasaCargada=+d.bcv>0||+d.compra>0;}
+  for(const q of qs){const d=S.quincenas[q.key]||{};
+    const mq=S.movs.filter(x=>x.fecha>=q.desde&&x.fecha<=q.hasta&&x.moneda==="Bs"&&+x.tasa>0);
+    const inR=(+d.sueldoTasa>0&&d.sueldoMon==="Bs")?+d.sueldoTasa:((mq.find(x=>x.clase==="ingreso")||{}).tasa||0);
+    const outR=(mq.find(x=>x.clase==="salida")||{}).tasa||0;
+    const ownB=+d.bcv>0?+d.bcv:(+inR||0), ownP=+d.compra>0?+d.compra:(+outR||0);
+    q.bcv=ownB>0?ownB:pB; q.buy=ownP>0?ownP:(pP>0?pP:0); pB=q.bcv; pP=q.buy; q.d=d; q.tasaCargada=ownB>0; q.tasaPropia=ownB>0;}
   const pmR=+c.comisionPM||0, pmF=x=>(x.clase==="salida"&&x.pm&&x.moneda!=="USDT")?1+pmR:1;
-  const toBcv=(x,q)=>{const t=+x.tasa>0?+x.tasa:q.bcv;return (x.moneda==="Bs"?(t>0?(+x.monto||0)/t:0):x.moneda==="$"?(+x.monto||0):0)*pmF(x);};
+  const toBcv=(x,q)=>{const t=+x.tasa>0?+x.tasa:(q.bcv||0);return (x.moneda==="Bs"?(t>0?(+x.monto||0)/t:0):x.moneda==="$"?(+x.monto||0):0)*pmF(x);};
   const toUs=x=>x.moneda==="USDT"?(+x.monto||0):0;
   const eqUsd=(x,q)=>x.moneda==="USDT"?(+x.monto||0):toBcv(x,q);
   for(const q of qs){q.ms=S.movs.filter(x=>x.fecha>=q.desde&&x.fecha<=q.hasta); q.salTot=q.ms.filter(x=>x.clase==="salida").reduce((a,x)=>a+eqUsd(x,q),0);}
@@ -378,8 +383,10 @@ function compute(opt={}){
   let aR=Math.min(capIni*(+c.pctCapReserva||0),capIni); let aL=fill(capIni-aR);
   const rows=[];
   for(const q of qs){
-    const d=q.d, loss=q.buy>0&&q.bcv>0?1-q.bcv/q.buy:0;
-    const sueldoBase=(+c.sueldoBase||0)*(1+(+c.iva||0)), sueldoEdit=d.sueldo!==undefined&&d.sueldo!==""&&d.sueldo!==null, sueldo=sueldoEdit?(+d.sueldo||0):sueldoBase;
+    const d=q.d, loss=q.buy>0&&q.bcv>0&&q.buy>q.bcv?1-q.bcv/q.buy:0;
+    const sueldoBase=(+c.sueldoBase||0)*(1+(+c.iva||0)), sueldoEdit=d.sueldo!==undefined&&d.sueldo!==""&&d.sueldo!==null;
+    const sueldoBs=sueldoEdit&&d.sueldoMon==="Bs", sueldoFalta=sueldoBs&&!(+d.sueldoTasa>0);
+    const sueldo=sueldoEdit?(sueldoBs?(+d.sueldoTasa>0?(+d.sueldo||0)/(+d.sueldoTasa):0):(+d.sueldo||0)):sueldoBase;
     const agui=(c.aguinaldoFecha&&c.aguinaldoFecha>=q.desde&&c.aguinaldoFecha<=q.hasta)?(+c.aguinaldo||0):0;
     const skip=(S.quincenas[q.key]||{}).skip||[];
     q.skipped=S.gastos.filter(g=>g.activo&&+g.q===q.q&&skip.includes(g.id));
@@ -408,7 +415,10 @@ function compute(opt={}){
       }});
     const snap={}; G.forEach(g=>snap[g.id]=g.bal);
     const gSum=G.reduce((a,g)=>a+g.bal,0);
-    rows.push({...q,sueldoBase,sueldoEdit,comMov,loss,sueldo,agui,gList,gastos,com,extraBs,extraUs,salBs,salUs,fees,varEst,sob,convEst,conv,real,lossUsd,neto,apR,apG,apL,aR,aL,gSum,snap,buys,tot:aR+aL+gSum,capReal:+d.capitalReal||0});
+    const B=q.bcv||0, pmx=x=>(x.clase==="salida"&&x.pm&&x.moneda!=="USDT")?1+pmR:1;
+    const ingBs=(sueldoBs?(+d.sueldo||0):sueldo*B)+agui*B+ing.reduce((a,x)=>a+(x.moneda==="Bs"?+x.monto||0:x.moneda==="$"?(+x.monto||0)*B:0),0);
+    const gasBs=(gastos+com)*B+sal.reduce((a,x)=>a+(x.moneda==="Bs"?(+x.monto||0)*pmx(x):x.moneda==="$"?(+x.monto||0)*pmx(x)*B:0),0);
+    rows.push({...q,ingBs,gasBs,sueldoBase,sueldoEdit,sueldoBs,sueldoFalta,comMov,loss,sueldo,agui,gList,gastos,com,extraBs,extraUs,salBs,salUs,fees,varEst,sob,convEst,conv,real,lossUsd,neto,apR,apG,apL,aR,aL,gSum,snap,buys,tot:aR+aL+gSum,capReal:+d.capitalReal||0});
   }
   // meses
   const months=[];
@@ -432,27 +442,25 @@ document.getElementById("nav").addEventListener("click",e=>{const b=e.target.clo
 document.getElementById("fab").addEventListener("click",()=>movSheet());
 function curRate(){const R=compute();const i=curIdx(R.rows);return R.rows[i].bcv;}
 function syncCur(){document.querySelectorAll("#curtog [data-cur]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.cur===CUR));}
-document.getElementById("curtog").addEventListener("click",e=>{const b=e.target.closest("[data-cur]");if(!b)return;CUR=b.dataset.cur;try{localStorage.setItem("ceop.cur",CUR);}catch(x){}buzz();const y=window.scrollY;render();window.scrollTo(0,y);});
+document.getElementById("curtog").addEventListener("click",e=>{const b=e.target.closest("[data-cur]");if(!b)return;if(b.dataset.cur==="VES"&&!(curRate()>0)){toast("Todavía no hay tasa cargada. Registra un ingreso o una salida en Bs con su tasa.");return;}CUR=b.dataset.cur;try{localStorage.setItem("ceop.cur",CUR);}catch(x){}buzz();const y=window.scrollY;render();window.scrollTo(0,y);});
 function render(){RATE=curRate();CURV=view==="mes"?CUR:"USD";syncCur();document.body.classList.toggle("ves",CURV==="VES");document.getElementById("curtog").classList.toggle("hidden",view!=="mes");nav();const app=document.getElementById("app");
   const fresh=!S.config.onboarded&&!S.config.sueldoBase&&!S.gastos.length&&!S.movs.length;
   document.getElementById("fab").classList.toggle("hidden",(fresh&&view!=="ajustes")||view==="ajustes");
   if(fresh&&view!=="ajustes"){app.innerHTML=welcome();bind();return;}
   app.innerHTML={inicio:vInicio,mes:vMes,metas:vMetas,proy:vProy,ajustes:vAjustes}[view](); bind();}
 function welcome(){return `<div class="hero"><div class="top brandrow"><img src="icon-192.png" alt=""><span>Ceop</span></div><div class="big">Hola</div><div class="sub">Tus datos se guardan solo en este teléfono.</div></div>
-<div class="panel lift"><h3>Para empezar</h3><p class="muted">Toca <b>Empezar desde hoy</b>: solo te pide tu saldo en Binance y la tasa del día. Si tienes un respaldo (.json), puedes importarlo.</p>
+<div class="panel lift"><h3>Para empezar</h3><p class="muted">Toca <b>Empezar desde hoy</b>: solo te pide tu saldo en Binance. Si tienes un respaldo (.json), puedes importarlo.</p>
 <button class="btn full" id="startToday">Empezar desde hoy</button>
 <label class="btn ghost full" style="margin-top:10px">Importar respaldo<input type="file" accept="application/json,.json" id="impW" class="hidden"></label></div>`;}
 function onboard(){
   sheet(`<div class="head"><h3>Empezar desde hoy</h3><button data-close aria-label="Cerrar">✕</button></div>
   <p class="small muted" style="margin-top:0">Solo lo mínimo para arrancar. Sueldo, gastos fijos, metas y lo demás los agregas después desde Ajustes y Metas.</p>
   <div class="field"><label for="obB">¿Cuánto tienes hoy en Binance? (USDT)</label><input id="obB" inputmode="decimal" style="font-size:1.4rem;font-weight:700"></div>
-  <div class="grid2"><div class="field"><label for="obT">Tasa BCV de hoy (Bs por $)</label><input id="obT" inputmode="decimal"></div>
-  <div class="field"><label for="obP">Tasa a la que compras USDT (opcional)</label><input id="obP" inputmode="decimal"></div></div>
-  <p class="small muted">La tasa sirve para pasar a dólares lo que registres en Bs. Después la actualizas en cada quincena, en la pestaña Mes.</p>
+  <p class="small muted">Las tasas las escribes tú en cada movimiento: la BCV en los ingresos y la de Binance o cripto en las salidas.</p>
   <button class="btn full" id="obGo" style="margin-top:10px">Empezar</button>`);
-  document.getElementById("obGo").onclick=()=>{const b=numIn(obB.value),t=numIn(obT.value),p=numIn(obP.value);
-    if(!(b>=0)||obB.value.trim()===""){toast("Escribe tu saldo en Binance");obB.focus();return;} if(!(t>0)){toast("Escribe la tasa BCV de hoy");obT.focus();return;}
-    S=structuredClone(DEFAULT); Object.assign(S.config,{inicio:todayStr().slice(0,7),capBinance:b,tasaBcvIni:t,tasaCompraIni:p>0?p:t,onboarded:true,fechaInicio:todayStr()});
+  document.getElementById("obGo").onclick=()=>{const b=numIn(obB.value);
+    if(!(b>=0)||obB.value.trim()===""){toast("Escribe tu saldo en Binance");obB.focus();return;}
+    S=structuredClone(DEFAULT); Object.assign(S.config,{inicio:todayStr().slice(0,7),capBinance:b,tasaBcvIni:0,tasaCompraIni:0,onboarded:true,fechaInicio:todayStr()});
     save();closeSheet();homeQ=null;curMonth=null;openQ=null;view="inicio";render();buzz();toast("Listo. Arrancaste desde hoy");};
   setTimeout(()=>obB.focus(),250);
 }
@@ -505,7 +513,7 @@ function vInicio(){
    ${qBox(q)}
    <div class="row" style="margin-top:10px"><span class="muted small">Para convertir a USDT</span><span class="money">${$m(q.sob)} BCV</span></div>
    ${base>0?`<div class="flow"><div class="kept" style="width:${kept/base*100}%">${$m(kept,false)} USDT</div><div class="lost" style="width:${lost/base*100}%"></div></div>`:`<div class="empty">Esta quincena no deja sobrante para convertir.</div>`}
-   <div class="row small"><span class="muted">Pierdes en el cambio</span><span class="money" style="color:var(--loss)">${$m(lost,false)} (${Math.round(q.loss*1000)/10}%)</span></div>
+   ${q.bcv>0&&q.buy>0?`<div class="row small"><span class="muted">Pierdes en el cambio</span><span class="money" style="color:var(--loss)">${$m(lost)} (${Math.round(q.loss*1000)/10}%)</span></div>`:`<p class="small muted" style="margin:4px 0 0">Para calcular la pérdida por cambio, carga la tasa BCV y la tasa de compra en el cobro de la quincena.</p>`}
    ${q.real?"":`<p class="small muted" style="margin:8px 0 0">${q.tasaCargada?"Con tu tasa cargada.":`Con la última tasa cargada.`} <button class="linkbtn" data-mes="${Math.floor(homeQ/2)}">Cargar datos reales</button></p>`}
   </section>
   <h2>Metas</h2><div class="panel">${metasH}<button class="btn ghost full" data-go="metas" style="margin-top:6px">Ver metas</button></div>
@@ -538,14 +546,14 @@ function vMes(){
      <div class="h"><b>Quincena ${r.q}</b><span>${isNow?`<span class="badge now">Actual</span> `:""}${r.tasaCargada||r.real?`<span class="badge ok">✓ Cobro cargado</span>`:`<span class="badge">Cobro pendiente</span>`}</span></div>
      <div class="small muted">Cobro: ${fmtDY(r.cobro)} · del ${fmtD(r.desde)} al ${fmtD(r.hasta)}${r.sueldoEdit?" · sueldo cambiado":""}</div>
      <div style="margin-top:10px" class="small muted">Te queda</div>
-     <div class="big ${q<0?"neg":""}">${$m(q)}</div><div class="alt">${$alt(q)}</div>
+     <div class="big ${q<0?"neg":""}">${CURV==="VES"&&(r.bcv>0||r.ingBs)?"Bs "+nf.format(r.ingBs-r.gasBs):$usd(q)}</div><div class="alt">${CURV==="VES"&&(r.bcv>0||r.ingBs)?$usd(q):(r.bcv>0||r.ingBs?"Bs "+nf.format(r.ingBs-r.gasBs):"Sin tasa cargada")}</div>
      <div class="bar"><span style="width:${p*100}%;background:${p>.9?"var(--neg)":"var(--fix)"}"></span></div>
-     <div class="ft"><span>Gastado ${$m(gas)}</span><span>de ${$m(ing)}</span></div>
+     <div class="ft"><span>Gastado ${CURV==="VES"?"Bs "+nf.format(r.gasBs):$usd(gas)}</span><span>de ${CURV==="VES"?"Bs "+nf.format(r.ingBs):$usd(ing)}</span></div>
      <div class="ft" style="margin-top:6px"><span>Toca para ver gastos y todo lo demás</span><span>›</span></div></button>`;});
   const gasM=a.gastos+a.com+a.salBs+b.gastos+b.com+b.salBs, ingM=a.sueldo+a.agui+a.extraBs+b.sueldo+b.agui+b.extraBs;
   return `<div class="mhead"><button id="mPick" aria-label="Elegir mes">${MESESL[M.m-1]} ${M.y} ▾</button></div>
-  <div class="qcards"><div class="qcard" style="cursor:default"><div class="h"><b>Ingresos del mes</b></div><div class="big">${$m(ingM)}</div><div class="alt">${$alt(ingM)}</div>
-   <div class="ft" style="margin-top:8px"><span>Gastado ${$m(gasM)}</span><span>Te queda ${$m(ingM-gasM)}</span></div></div>
+  <div class="qcards"><div class="qcard" style="cursor:default"><div class="h"><b>Ingresos del mes</b></div>${(()=>{const iB=a.ingBs+b.ingBs,gB=a.gasBs+b.gasBs,v=CURV==="VES";return `<div class="big">${v?"Bs "+nf.format(iB):$usd(ingM)}</div><div class="alt">${v?$usd(ingM):(iB?"Bs "+nf.format(iB):"")}</div>
+   <div class="ft" style="margin-top:8px"><span>Gastado ${v?"Bs "+nf.format(gB):$usd(gasM)}</span><span>Te queda ${v?"Bs "+nf.format(iB-gB):$usd(ingM-gasM)}</span></div>`;})()}</div>
   ${card(a)}${card(b)}</div>
   <h2>Total del mes</h2>
   <div class="panel"><ul class="lines">
@@ -565,8 +573,11 @@ function qDetail(r,R){return withRate(r.bcv,()=>{
   <div class="panel lift">${qBox(r)}</div>
   <h2>Ingresos de la quincena</h2>
   <div class="panel">
-   <div class="field"><label for="sue-${r.key}">Sueldo de esta quincena ($)</label><input inputmode="decimal" id="sue-${r.key}" data-q="${r.key}" data-f="sueldo" value="${r.sueldoEdit?(S.quincenas[r.key].sueldo):""}" placeholder="${nf.format(r.sueldoBase)} (normal)"></div>
-   <p class="small muted" style="margin:0 0 6px">${r.sueldoEdit?`Cambiado solo para esta quincena (normal: ${$usd(r.sueldoBase)}). Bórralo para volver al normal.`:`Vacío = tu sueldo normal. Pon otro monto si esta vez cobraste distinto, o 0 si no cobraste. El sueldo normal se cambia en Ajustes → Ingresos.`}</p>
+   ${(()=>{const d=S.quincenas[r.key]||{}, mon=d.sueldoMon||"$";return `
+   <div class="field"><label for="sue-${r.key}">Sueldo de esta quincena</label><input inputmode="decimal" id="sue-${r.key}" data-sq="${r.key}" data-sf="sueldo" value="${r.sueldoEdit?d.sueldo:""}" placeholder="${r.sueldoBase>0?nf.format(r.sueldoBase)+" $ (normal)":"Monto"}"></div>
+   <div class="chips" role="group" aria-label="Moneda del sueldo">${["$","Bs"].map(m=>`<button class="chip" data-sm="${r.key}|${m}" aria-pressed="${mon===m}">${m}</button>`).join("")}</div>
+   ${mon==="Bs"?`<div class="field"><label for="sut-${r.key}">Tasa BCV del día que cobraste (Bs por $)</label><input inputmode="decimal" id="sut-${r.key}" data-sq="${r.key}" data-sf="sueldoTasa" value="${d.sueldoTasa||""}" placeholder="Escribe la tasa"></div>`:""}
+   <p class="small muted" style="margin:0 0 6px">${r.sueldoEdit?(r.sueldoFalta?`<span class="alert-neg">Falta la tasa BCV para pasar el sueldo a dólares.</span>`:`= <b>${$usd(r.sueldo)}</b>${r.sueldoBs?` a tasa ${nf.format(d.sueldoTasa)}`:""}. Cambiado solo para esta quincena${r.sueldoBase>0?` (normal: ${$usd(r.sueldoBase)})`:""}. Bórralo para volver al normal.`):(r.sueldoBase>0?`Vacío = tu sueldo normal (${$usd(r.sueldoBase)}). Pon el monto real, en $ o en Bs, si esta vez cobraste distinto, o 0 si no cobraste.`:`Escribe lo que cobraste, en $ o en Bs. El sueldo normal se define en Ajustes → Ingresos.`)}</p>`;})()}
    <ul class="lines">${r.agui?`<li><span>Aguinaldo</span><span class="money">${$m(r.agui)}</span></li>`:""}
     ${S.movs.filter(x=>x.clase==="ingreso"&&x.fecha>=r.desde&&x.fecha<=r.hasta).map(x=>`<li class="mov tap" data-edit="${x.id}" style="cursor:pointer"><span>${EMO[x.categoria]||"💵"} ${esc(x.concepto||x.categoria)} <span class="small muted">· ${fmtD(x.fecha)} · toca para editar</span></span><span class="money pos">+${x.moneda==="Bs"?$bs(x.monto):x.moneda==="USDT"?nf.format(x.monto)+" USDT":$usd(x.monto)}</span></li>`).join("")}
    </ul>
@@ -583,13 +594,15 @@ function monthPicker(){
   document.querySelectorAll("[data-pm]").forEach(b=>b.onclick=()=>{curMonth=+b.dataset.pm;selQ=null;closeSheet();render();});
 }
 function qBox(r){
-  const ing=r.sueldo+r.agui+r.extraBs, gas=r.gastos+r.com+r.salBs, queda=ing-gas, b=r.bcv;
-  const row=(l,v,cls)=>withRate(b,()=>`<li class="${cls||""}"><span>${l}</span><span style="text-align:right"><span class="money ${v<0?"neg":""}">${$m(v)}</span><br><span class="small muted">${$alt(v)}</span></span></li>`);
-  return `<ul class="lines">${row("Ingresos",ing)}${row("Gastado",gas)}${row("Te queda",queda,"total")}</ul>
+  const ing=r.sueldo+r.agui+r.extraBs, gas=r.gastos+r.com+r.salBs, queda=ing-gas, b=r.bcv, ves=CURV==="VES";
+  const fbs=v=>(v<-0.004?"−Bs ":"Bs ")+nf.format(Math.abs(v));
+  const row=(l,v,vb,cls)=>{const hasBs=b>0||vb!==0;const main=ves&&hasBs?fbs(vb):$usd(v), alt=ves&&hasBs?$usd(v):(hasBs?fbs(vb):"");
+    return `<li class="${cls||""}"><span>${l}</span><span style="text-align:right"><span class="money ${v<0?"neg":""}">${main}</span>${alt?`<br><span class="small muted">${alt}</span>`:""}</span></li>`;};
+  return `<ul class="lines">${row("Ingresos",ing,r.ingBs)}${row("Gastado",gas,r.gasBs)}${row("Te queda",queda,r.ingBs-r.gasBs,"total")}</ul>
    ${r.salUs>0?`<p class="small muted" style="margin:4px 0 0">Además sacaste ${$m(r.salUs)} de tus USDT.</p>`:""}
    ${r.extraUs>0?`<p class="small muted" style="margin:4px 0 0">Además recibiste ${nf.format(r.extraUs)} USDT, que van directo a tu ahorro.</p>`:""}
    ${r.varEst>0?withRate(b,()=>`<p class="small muted" style="margin:4px 0 0">De lo que te queda, ${$m(r.varEst)} es tu presupuesto variable por gastar. Para ahorrar: ${$m(r.sob)}.</p>`):""}
-   <p class="small muted" style="margin:4px 0 0">A tasa BCV ${nf.format(b)}${r.tasaCargada?"":" (última cargada)"}.</p>`;
+   <p class="small muted" style="margin:4px 0 0">${b>0?`Los Bs son los montos reales que registraste; los gastos fijos se pasan a Bs con la tasa BCV ${nf.format(b)}${r.tasaPropia?"":" (la última que cargaste)"}.`:"Sin tasa BCV cargada: los montos en Bs aparecen cuando registres un ingreso o el sueldo en Bs con su tasa."}</p>`;
 }
 function qPanel(r){
   const d=S.quincenas[r.key]||{}, dif=r.capReal?r.capReal-r.tot:null;
@@ -816,7 +829,7 @@ function vAjustes(){
    ${it("resp","💾","Respaldo",days==null?"⚠️ Nunca has hecho uno":`${days>14?"⚠️ ":""}Último hace ${days} ${days===1?"día":"días"}`)}
    ${it("pin","🔒","PIN",c.pinHash?"Activado":"Desactivado")}
   </div>
-  <p class="small muted" style="text-align:center;margin:14px 0">Ceop · versión 2.7</p>`;
+  <p class="small muted" style="text-align:center;margin:14px 0">Ceop · versión 2.8</p>`;
 }
 function gastoSheet(id){
   const x=id?S.gastos.find(g=>g.id===id):{id:uid(),concepto:"",tipo:"Fijo",q:1,monto:"",activo:true,desde:"",hasta:"",pm:false};
@@ -882,16 +895,16 @@ function movSheet(id,preset){
   };
   function syncPm(){const show=clase==="salida"&&mon!=="USDT";pmB.classList.toggle("hidden",!show);pmB.setAttribute("aria-pressed",pm&&show);
     const venta=clase==="salida"&&cat==="Venta de USDT"; tasaW.classList.toggle("hidden",!(mon==="Bs"||venta)||clase==="transferencia");
-    mTL.textContent=venta?"Tasa a la que vendiste (Bs por USDT)":"Tasa a la que se hizo (Bs por $)"; mT.placeholder=venta?"Opcional":nf.format(rateFor(mF.value));}
+    mTL.textContent=venta?"Tasa a la que vendiste (Bs por USDT)":clase==="ingreso"?"Tasa BCV del día (Bs por $)":"Tasa a la que se hizo: Binance o cripto (Bs por $)"; mT.placeholder=venta?"Opcional":"Escribe la tasa";}
   pmB.onclick=()=>{pm=!pm;syncPm();prev();};
   const prev=()=>{const v=numIn(mM.value);
     if(clase==="transferencia"){const r=numIn(mR.value);pv.innerHTML=v&&r?`Costo de la transferencia: <b>${$m(Math.max(0,v-r))}</b> (${pct(v>0?Math.max(0,v-r)/v:0)})`:"Solo cuenta como gasto la diferencia entre lo que enviaste y lo que llegó.";return;}
     const usePm=pm&&clase==="salida"&&mon!=="USDT", r=+S.config.comisionPM||0;
     if(clase==="salida"&&cat==="Venta de USDT"){const tv=numIn(mT.value);pv.innerHTML=(v&&tv?`Recibiste ≈ <b>${$bs(v*tv)}</b>. `:"")+"Sale de tus ahorros en USDT y cuenta como gasto variable. Si registras la venta, no registres también en qué gastaste esos Bs, o se contará dos veces.";return;}
-    if(mon==="Bs"){const t=numIn(mT.value)>0?numIn(mT.value):rateFor(mF.value);pv.innerHTML=v?`≈ <b>${$usd(t>0?v/t:0)}</b> a tasa ${nf.format(t)}${usePm?`<br>Comisión pago móvil: <b>${$bs(v*r)}</b> (${$m(t>0?v*r/t:0)}) · total <b>${$bs(v*(1+r))}</b>`:""}`:`Se convierte con la tasa BCV de esa quincena (${nf.format(t)}).`;}
+    if(mon==="Bs"){const t=numIn(mT.value);if(!(t>0)){pv.innerHTML=v?"Escribe la tasa para ver cuánto es en dólares.":"";return;}pv.innerHTML=v?`≈ <b>${$usd(v/t)}</b> a tasa ${nf.format(t)}${usePm?`<br>Comisión pago móvil: <b>${$bs(v*r)}</b> (${$m(t>0?v*r/t:0)}) · total <b>${$bs(v*(1+r))}</b>`:""}`:"";}
     else if(mon==="$")pv.innerHTML=`Monto en dólares BCV.${usePm&&v?` Comisión pago móvil: <b>${$m(v*r)}</b> · total <b>${$m(v*(1+r))}</b>`:""}`;
     else pv.innerHTML=clase==="salida"?"Sale directo de tus ahorros en USDT.":"Entra directo a tu ahorro, sin pérdida por cambio.";
-    if(clase==="salida"&&cat&&+S.topes[cat]>0&&v){const R=compute();const M=R.months.find(m=>m.key===mF.value.slice(0,7));if(M){const t=mon==="Bs"?rateFor(mF.value):1;const add=mon==="Bs"?(t>0?v/t:0):v;const o=id?S.movs.find(m=>m.id===id):null;const was=o&&o.categoria===cat&&o.fecha.slice(0,7)===mF.value.slice(0,7)?(o.moneda==="Bs"?o.monto/t:+o.monto):0;const sp=(M.cat[cat]||0)-was+add, cap=+S.topes[cat];
+    if(clase==="salida"&&cat&&+S.topes[cat]>0&&v){const R=compute();const M=R.months.find(m=>m.key===mF.value.slice(0,7));if(M){const t=mon==="Bs"?numIn(mT.value):1;if(mon==="Bs"&&!(t>0))return;const add=mon==="Bs"?v/t:v;const o=id?S.movs.find(m=>m.id===id):null;const was=o&&o.categoria===cat&&o.fecha.slice(0,7)===mF.value.slice(0,7)?(o.moneda==="Bs"?o.monto/t:+o.monto):0;const sp=(M.cat[cat]||0)-was+add, cap=+S.topes[cat];
       pv.innerHTML+=`<br>${EMO[cat]||""} ${cat} este mes: <b class="${sp>cap?"neg":""}">${$m(sp,false)} de ${$m(cap,false)}</b>${sp>cap?" · te pasas del tope":sp>=cap*.8?" · cerca del tope":""}`;}}
   };
   document.querySelectorAll("[data-cl]").forEach(b=>b.onclick=()=>{clase=b.dataset.cl;if(clase!=="transferencia"&&mon==="USDT"&&!id)mon="Bs";document.querySelectorAll("[data-cl]").forEach(z=>z.setAttribute("aria-pressed",z===b));document.querySelectorAll("[data-mo]").forEach(z=>z.setAttribute("aria-pressed",z.dataset.mo===mon));cat="";sync();});
@@ -903,6 +916,7 @@ function movSheet(id,preset){
     if(clase==="transferencia"){Object.assign(v,{de:mDe.value,a:mA.value,recibido:numIn(mR.value),categoria:"Transferencia",concepto:""});if(!v.recibido){toast("Escribe cuánto llegó");return;}if(v.de===v.a){toast("Elige dos cuentas distintas");return;}}
     else{Object.assign(v,{categoria:cat,concepto:mC.value.trim()});{const tt=numIn(mT.value);if(tt>0&&(mon==="Bs"||cat==="Venta de USDT"))v.tasa=tt;}if(clase==="salida"&&mon!=="USDT"){v.pm=pm;try{localStorage.setItem('ceop.pm',pm?'1':'0');}catch(e){}}}
     if(!v.monto){toast("Escribe el monto");mM.focus();return;} if(!v.fecha){toast("Elige la fecha");return;}
+    if(v.moneda==="Bs"&&clase!=="transferencia"&&!(+v.tasa>0)){toast(clase==="ingreso"?"Escribe la tasa BCV del día":"Escribe la tasa a la que se hizo");mT.focus();return;}
     const i=S.movs.findIndex(m=>m.id===x.id); if(i>=0)S.movs[i]=v; else S.movs.push(v); save();closeSheet();render();buzz();
     let msg=id?"Movimiento actualizado":clase==="salida"?"Salida registrada":clase==="ingreso"?"Ingreso registrado":"Transferencia registrada";
     if(clase==="salida"&&+S.topes[v.categoria]>0){const M=compute().months.find(m=>m.key===v.fecha.slice(0,7));if(M){const sp=M.cat[v.categoria]||0,cap=+S.topes[v.categoria];if(sp>cap)msg=`${v.categoria}: te pasaste del tope por ${$m(sp-cap,false)}`;else if(sp>=cap*.8)msg=`${v.categoria}: te quedan ${$m(cap-sp,false)} este mes`;}}
@@ -975,6 +989,9 @@ function bind(){
   on("[data-selq]",b=>b.onclick=()=>{selQ=b.dataset.selq;selDay=null;render();});
   on("[data-clrday]",b=>b.onclick=()=>{selDay=null;render();});
   on("#mPick",b=>b.onclick=monthPicker);
+  on("[data-sq]",i=>i.addEventListener("change",()=>{const k=i.dataset.sq,f=i.dataset.sf;S.quincenas[k]=S.quincenas[k]||{};const v=i.value.trim();
+    if(v==="")delete S.quincenas[k][f];else S.quincenas[k][f]=numIn(v);save();const y=window.scrollY;render();window.scrollTo(0,y);toast("Guardado");}));
+  on("[data-sm]",b=>b.onclick=()=>{const [k,m]=b.dataset.sm.split("|");S.quincenas[k]=S.quincenas[k]||{};S.quincenas[k].sueldoMon=m;save();const y=window.scrollY;render();window.scrollTo(0,y);});
   on("[data-newinc]",b=>b.onclick=()=>movSheet(null,{clase:"ingreso",moneda:"Bs"}));
   on("[data-mdel]",b=>b.onclick=e=>{e.stopPropagation();const x=S.movs.find(m=>m.id===b.dataset.mdel);if(x)removeWithUndo("movs",x.id,"Movimiento eliminado");});
   on("[data-skip]",b=>b.onclick=()=>{const [k,id]=b.dataset.skip.split("|");S.quincenas[k]=S.quincenas[k]||{};const sk=S.quincenas[k].skip=S.quincenas[k].skip||[];if(!sk.includes(id))sk.push(id);save();const y=window.scrollY;render();window.scrollTo(0,y);buzz();
