@@ -271,12 +271,12 @@ const KEY="quincena.v1";
 const DEFAULT={
   version:2,
   config:{inicio:"",meses:14,sueldoBase:0,iva:0,aguinaldo:0,aguinaldoFecha:"",tasaBcvIni:0,tasaCompraIni:0,comisionPM:0.003,
-    capBinance:0,capKontigo:0,capFacebank:0,mesesReserva:3,pctCapReserva:0.3,pctReserva:0.2,presupuestoVar:0,mesesPromedio:3,pinHash:""},
+    capBinance:0,capKontigo:0,capFacebank:0,onboarded:false,mesesReserva:3,pctCapReserva:0.3,pctReserva:0.2,presupuestoVar:0,mesesPromedio:3,pinHash:""},
   gastos:[],metas:[],topes:{},quincenas:{},movs:[],lastBackup:null
 };
 const CATS_OUT=["Comida","Salud","Transporte","Hogar","Familia","Sasha","Ocio","Ropa","Regalos","Imprevistos","Venta de USDT","Otros"];
-const CATS_IN=["Venta de perfumes","Trabajo freelance","Bono","Reembolso","Regalo","Rendimiento","Otro"];
-const EMO={"Venta de USDT":"💸","Comida":"🍔","Salud":"💊","Transporte":"🚌","Hogar":"🏠","Familia":"👪","Sasha":"🐶","Ocio":"🎮","Ropa":"👕","Regalos":"🎁","Imprevistos":"⚠️","Otros":"📦","Venta de perfumes":"🧴","Trabajo freelance":"💻","Bono":"⭐","Reembolso":"↩️","Regalo":"🎁","Rendimiento":"📈","Otro":"💵","Transferencia":"⇄"};
+const CATS_IN=["Venta","Trabajo freelance","Bono","Reembolso","Regalo","Rendimiento","Otro"];
+const EMO={"Venta de USDT":"💸","Comida":"🍔","Salud":"💊","Transporte":"🚌","Hogar":"🏠","Familia":"👪","Sasha":"🐶","Ocio":"🎮","Ropa":"👕","Regalos":"🎁","Imprevistos":"⚠️","Otros":"📦","Venta":"🏷️","Venta de perfumes":"🏷️","Trabajo freelance":"💻","Bono":"⭐","Reembolso":"↩️","Regalo":"🎁","Rendimiento":"📈","Otro":"💵","Transferencia":"⇄"};
 const CUENTAS=["Binance","Kontigo","Facebank","Bs (banco)"];
 const MESES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
 const MESESL=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
@@ -292,6 +292,7 @@ function merge(d){
   if(d.config&&d.config.pctAhorroReserva!=null&&d.config.pctReserva==null) o.config.pctReserva=d.config.pctAhorroReserva;
   ["metaCarro","confIncluir","confMonto","confFecha","pctAhorroReserva"].forEach(k=>delete o.config[k]);
   if(d.config&&d.config.gastoVarManual!=null&&!(+o.config.presupuestoVar)) o.config.presupuestoVar=+d.config.gastoVarManual||0; delete o.config.gastoVarManual;
+  (o.movs||[]).forEach(m=>{if(m.categoria==="Venta de perfumes")m.categoria="Venta";});
   o.topes=o.topes||{}; o.movs=(o.movs||[]).filter(m=>m.categoria!=="Retiro de capital"||true); o.version=2; return o;
 }
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){toast("No se pudo guardar: el almacenamiento está lleno o bloqueado");}}
@@ -378,7 +379,7 @@ function compute(opt={}){
   const rows=[];
   for(const q of qs){
     const d=q.d, loss=q.buy>0&&q.bcv>0?1-q.bcv/q.buy:0;
-    const sueldo=(+c.sueldoBase||0)*(1+(+c.iva||0));
+    const sueldoBase=(+c.sueldoBase||0)*(1+(+c.iva||0)), sueldoEdit=d.sueldo!==undefined&&d.sueldo!==""&&d.sueldo!==null, sueldo=sueldoEdit?(+d.sueldo||0):sueldoBase;
     const agui=(c.aguinaldoFecha&&c.aguinaldoFecha>=q.desde&&c.aguinaldoFecha<=q.hasta)?(+c.aguinaldo||0):0;
     const skip=(S.quincenas[q.key]||{}).skip||[];
     q.skipped=S.gastos.filter(g=>g.activo&&+g.q===q.q&&skip.includes(g.id));
@@ -407,7 +408,7 @@ function compute(opt={}){
       }});
     const snap={}; G.forEach(g=>snap[g.id]=g.bal);
     const gSum=G.reduce((a,g)=>a+g.bal,0);
-    rows.push({...q,comMov,loss,sueldo,agui,gList,gastos,com,extraBs,extraUs,salBs,salUs,fees,varEst,sob,convEst,conv,real,lossUsd,neto,apR,apG,apL,aR,aL,gSum,snap,buys,tot:aR+aL+gSum,capReal:+d.capitalReal||0});
+    rows.push({...q,sueldoBase,sueldoEdit,comMov,loss,sueldo,agui,gList,gastos,com,extraBs,extraUs,salBs,salUs,fees,varEst,sob,convEst,conv,real,lossUsd,neto,apR,apG,apL,aR,aL,gSum,snap,buys,tot:aR+aL+gSum,capReal:+d.capitalReal||0});
   }
   // meses
   const months=[];
@@ -433,14 +434,28 @@ function curRate(){const R=compute();const i=curIdx(R.rows);return R.rows[i].bcv
 function syncCur(){document.querySelectorAll("#curtog [data-cur]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.cur===CUR));}
 document.getElementById("curtog").addEventListener("click",e=>{const b=e.target.closest("[data-cur]");if(!b)return;CUR=b.dataset.cur;try{localStorage.setItem("ceop.cur",CUR);}catch(x){}buzz();const y=window.scrollY;render();window.scrollTo(0,y);});
 function render(){RATE=curRate();CURV=view==="mes"?CUR:"USD";syncCur();document.body.classList.toggle("ves",CURV==="VES");document.getElementById("curtog").classList.toggle("hidden",view!=="mes");nav();const app=document.getElementById("app");
-  const fresh=!S.config.sueldoBase&&!S.gastos.length&&!S.movs.length;
+  const fresh=!S.config.onboarded&&!S.config.sueldoBase&&!S.gastos.length&&!S.movs.length;
   document.getElementById("fab").classList.toggle("hidden",(fresh&&view!=="ajustes")||view==="ajustes");
   if(fresh&&view!=="ajustes"){app.innerHTML=welcome();bind();return;}
   app.innerHTML={inicio:vInicio,mes:vMes,metas:vMetas,proy:vProy,ajustes:vAjustes}[view](); bind();}
 function welcome(){return `<div class="hero"><div class="top brandrow"><img src="icon-192.png" alt=""><span>Ceop</span></div><div class="big">Hola</div><div class="sub">Tus datos se guardan solo en este teléfono.</div></div>
-<div class="panel lift"><h3>Para empezar</h3><p class="muted">Si tienes un archivo de respaldo (.json), impórtalo y la app queda lista con tus datos. Si no, configura tus ingresos y gastos desde Ajustes.</p>
-<label class="btn full">Importar respaldo<input type="file" accept="application/json,.json" id="impW" class="hidden"></label>
-<button class="btn ghost full" style="margin-top:10px" data-go="ajustes">Configurar desde cero</button></div>`;}
+<div class="panel lift"><h3>Para empezar</h3><p class="muted">Toca <b>Empezar desde hoy</b>: solo te pide tu saldo en Binance y la tasa del día. Si tienes un respaldo (.json), puedes importarlo.</p>
+<button class="btn full" id="startToday">Empezar desde hoy</button>
+<label class="btn ghost full" style="margin-top:10px">Importar respaldo<input type="file" accept="application/json,.json" id="impW" class="hidden"></label></div>`;}
+function onboard(){
+  sheet(`<div class="head"><h3>Empezar desde hoy</h3><button data-close aria-label="Cerrar">✕</button></div>
+  <p class="small muted" style="margin-top:0">Solo lo mínimo para arrancar. Sueldo, gastos fijos, metas y lo demás los agregas después desde Ajustes y Metas.</p>
+  <div class="field"><label for="obB">¿Cuánto tienes hoy en Binance? (USDT)</label><input id="obB" inputmode="decimal" style="font-size:1.4rem;font-weight:700"></div>
+  <div class="grid2"><div class="field"><label for="obT">Tasa BCV de hoy (Bs por $)</label><input id="obT" inputmode="decimal"></div>
+  <div class="field"><label for="obP">Tasa a la que compras USDT (opcional)</label><input id="obP" inputmode="decimal"></div></div>
+  <p class="small muted">La tasa sirve para pasar a dólares lo que registres en Bs. Después la actualizas en cada quincena, en la pestaña Mes.</p>
+  <button class="btn full" id="obGo" style="margin-top:10px">Empezar</button>`);
+  document.getElementById("obGo").onclick=()=>{const b=numIn(obB.value),t=numIn(obT.value),p=numIn(obP.value);
+    if(!(b>=0)||obB.value.trim()===""){toast("Escribe tu saldo en Binance");obB.focus();return;} if(!(t>0)){toast("Escribe la tasa BCV de hoy");obT.focus();return;}
+    S=structuredClone(DEFAULT); Object.assign(S.config,{inicio:todayStr().slice(0,7),capBinance:b,tasaBcvIni:t,tasaCompraIni:p>0?p:t,onboarded:true,fechaInicio:todayStr()});
+    save();closeSheet();homeQ=null;curMonth=null;openQ=null;view="inicio";render();buzz();toast("Listo. Arrancaste desde hoy");};
+  setTimeout(()=>obB.focus(),250);
+}
 const curIdx=rows=>{const t=todayStr();let i=rows.findIndex(r=>t>=r.desde&&t<=r.hasta);return i<0?(t<rows[0].desde?0:rows.length-1):i;};
 
 /* ================= inicio (dashboard) ================= */
@@ -521,7 +536,7 @@ function vMes(){
   const card=r=>withRate(r.bcv,()=>{const ing=r.sueldo+r.agui+r.extraBs, gas=r.gastos+r.com+r.salBs, q=ing-gas, p=ing>0?Math.min(1,gas/ing):0, isNow=t>=r.desde&&t<=r.hasta;
     return `<button class="qcard" data-openq="${r.key}" aria-label="Abrir quincena ${r.q}">
      <div class="h"><b>Quincena ${r.q}</b><span>${isNow?`<span class="badge now">Actual</span> `:""}${r.tasaCargada||r.real?`<span class="badge ok">✓ Cobro cargado</span>`:`<span class="badge">Cobro pendiente</span>`}</span></div>
-     <div class="small muted">Cobro: ${fmtDY(r.cobro)} · del ${fmtD(r.desde)} al ${fmtD(r.hasta)}</div>
+     <div class="small muted">Cobro: ${fmtDY(r.cobro)} · del ${fmtD(r.desde)} al ${fmtD(r.hasta)}${r.sueldoEdit?" · sueldo cambiado":""}</div>
      <div style="margin-top:10px" class="small muted">Te queda</div>
      <div class="big ${q<0?"neg":""}">${$m(q)}</div><div class="alt">${$alt(q)}</div>
      <div class="bar"><span style="width:${p*100}%;background:${p>.9?"var(--neg)":"var(--fix)"}"></span></div>
@@ -548,6 +563,14 @@ function qDetail(r,R){return withRate(r.bcv,()=>{
   const M=R.months[curMonth], list=S.movs.filter(x=>x.fecha>=r.desde&&x.fecha<=r.hasta).sort((p,q)=>q.fecha.localeCompare(p.fecha));
   return `<div class="dhead"><button class="back" data-closeq aria-label="Volver a ${MESESL[M.m-1]}">‹</button><h1>Quincena ${r.q} · ${MESESL[r.m-1]} ${r.y}<small>Cobro ${fmtDY(r.cobro)} · del ${fmtD(r.desde)} al ${fmtD(r.hasta)}</small></h1></div>
   <div class="panel lift">${qBox(r)}</div>
+  <h2>Ingresos de la quincena</h2>
+  <div class="panel">
+   <div class="field"><label for="sue-${r.key}">Sueldo de esta quincena ($)</label><input inputmode="decimal" id="sue-${r.key}" data-q="${r.key}" data-f="sueldo" value="${r.sueldoEdit?(S.quincenas[r.key].sueldo):""}" placeholder="${nf.format(r.sueldoBase)} (normal)"></div>
+   <p class="small muted" style="margin:0 0 6px">${r.sueldoEdit?`Cambiado solo para esta quincena (normal: ${$usd(r.sueldoBase)}). Bórralo para volver al normal.`:`Vacío = tu sueldo normal. Pon otro monto si esta vez cobraste distinto, o 0 si no cobraste. El sueldo normal se cambia en Ajustes → Ingresos.`}</p>
+   <ul class="lines">${r.agui?`<li><span>Aguinaldo</span><span class="money">${$m(r.agui)}</span></li>`:""}
+    ${S.movs.filter(x=>x.clase==="ingreso"&&x.fecha>=r.desde&&x.fecha<=r.hasta).map(x=>`<li class="mov tap" data-edit="${x.id}" style="cursor:pointer"><span>${EMO[x.categoria]||"💵"} ${esc(x.concepto||x.categoria)} <span class="small muted">· ${fmtD(x.fecha)} · toca para editar</span></span><span class="money pos">+${x.moneda==="Bs"?$bs(x.monto):x.moneda==="USDT"?nf.format(x.monto)+" USDT":$usd(x.monto)}</span></li>`).join("")}
+   </ul>
+   <button class="btn ghost full" data-newinc style="margin-top:8px">+ Agregar ingreso extra</button></div>
   <h2>Movimientos</h2>
   <div class="panel">${list.length?list.map(movRow).join("")+`<p class="small muted" style="margin:8px 0 0">Toca para editar. 🗑 para eliminar.</p>`:`<div class="empty">Sin movimientos en esta quincena. Regístralos con el botón +.</div>`}</div>
   ${qPanel(r)}`;});}
@@ -564,6 +587,7 @@ function qBox(r){
   const row=(l,v,cls)=>withRate(b,()=>`<li class="${cls||""}"><span>${l}</span><span style="text-align:right"><span class="money ${v<0?"neg":""}">${$m(v)}</span><br><span class="small muted">${$alt(v)}</span></span></li>`);
   return `<ul class="lines">${row("Ingresos",ing)}${row("Gastado",gas)}${row("Te queda",queda,"total")}</ul>
    ${r.salUs>0?`<p class="small muted" style="margin:4px 0 0">Además sacaste ${$m(r.salUs)} de tus USDT.</p>`:""}
+   ${r.extraUs>0?`<p class="small muted" style="margin:4px 0 0">Además recibiste ${nf.format(r.extraUs)} USDT, que van directo a tu ahorro.</p>`:""}
    ${r.varEst>0?withRate(b,()=>`<p class="small muted" style="margin:4px 0 0">De lo que te queda, ${$m(r.varEst)} es tu presupuesto variable por gastar. Para ahorrar: ${$m(r.sob)}.</p>`):""}
    <p class="small muted" style="margin:4px 0 0">A tasa BCV ${nf.format(b)}${r.tasaCargada?"":" (última cargada)"}.</p>`;
 }
@@ -763,7 +787,7 @@ function respaldoSheet(){
    <button class="btn danger full" id="wipe" style="margin-top:22px">Borrar todos los datos</button>`);
   const g=id=>document.getElementById(id);
   g("exp").onclick=exportJSON; g("csv").onclick=exportCSV; g("imp").onchange=()=>importJSON(g("imp").files[0]);
-  g("wipe").onclick=()=>askConfirm("Borrar todos los datos","Se borra todo lo guardado en este teléfono. No se puede deshacer, así que exporta un respaldo antes.","Borrar todo",()=>{localStorage.removeItem(KEY);S=load();homeQ=null;curMonth=null;view="inicio";render();toast("Datos borrados");});
+  g("wipe").onclick=()=>askConfirm("Borrar todos los datos","Se borra todo lo guardado en este teléfono: movimientos, gastos, metas, tasas y configuración. No se puede deshacer, así que exporta un respaldo antes. Después podrás empezar desde hoy.","Borrar todo",()=>{localStorage.removeItem(KEY);S=load();homeQ=null;curMonth=null;view="inicio";render();toast("Datos borrados");});
 }
 function pinSheet(){
   sheet(`<div class="head"><h3>PIN</h3><button data-close aria-label="Cerrar">✕</button></div>
@@ -792,7 +816,7 @@ function vAjustes(){
    ${it("resp","💾","Respaldo",days==null?"⚠️ Nunca has hecho uno":`${days>14?"⚠️ ":""}Último hace ${days} ${days===1?"día":"días"}`)}
    ${it("pin","🔒","PIN",c.pinHash?"Activado":"Desactivado")}
   </div>
-  <p class="small muted" style="text-align:center;margin:14px 0">Ceop · versión 2.6</p>`;
+  <p class="small muted" style="text-align:center;margin:14px 0">Ceop · versión 2.7</p>`;
 }
 function gastoSheet(id){
   const x=id?S.gastos.find(g=>g.id===id):{id:uid(),concepto:"",tipo:"Fijo",q:1,monto:"",activo:true,desde:"",hasta:"",pm:false};
@@ -816,8 +840,9 @@ function gastoSheet(id){
 function rateFor(fecha){const R=compute();const q=R.rows.find(r=>fecha>=r.desde&&fecha<=r.hasta);return q?q.bcv:(+S.config.tasaBcvIni||0);}
 function frecuentes(clase){const seen=new Set(),out=[];for(const x of [...S.movs].reverse()){if(x.clase!==clase)continue;const k=[x.concepto,x.categoria,x.moneda,x.monto,!!x.pm].join("|");if(seen.has(k))continue;seen.add(k);out.push(x);if(out.length>=6)break;}return out;}
 function defaultFecha(){if(view!=="mes")return todayStr();const t=todayStr();const sq=openQ||selQ;if(sq){const R=compute();const r=R.rows.find(r=>r.key===sq);if(r&&!(t>=r.desde&&t<=r.hasta))return r.desde;}return t;}
-function movSheet(id){
+function movSheet(id,preset){
   const x=id?{...S.movs.find(m=>m.id===id)}:{id:uid(),clase:"salida",fecha:defaultFecha(),concepto:"",categoria:"",moneda:"Bs",monto:"",de:"Kontigo",a:"Binance",recibido:""};
+  if(!id&&preset)Object.assign(x,preset);
   let clase=x.clase, mon=x.moneda, cat=x.categoria, fecha=x.fecha, pm=id?!!x.pm:localStorage.getItem('ceop.pm')==='1';
   const yest=(()=>{const d=new Date();d.setDate(d.getDate()-1);return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;})();
   sheet(`<div class="head"><h3>${id?"Editar movimiento":"Registrar"}</h3><button data-close aria-label="Cerrar">✕</button></div>
@@ -950,6 +975,7 @@ function bind(){
   on("[data-selq]",b=>b.onclick=()=>{selQ=b.dataset.selq;selDay=null;render();});
   on("[data-clrday]",b=>b.onclick=()=>{selDay=null;render();});
   on("#mPick",b=>b.onclick=monthPicker);
+  on("[data-newinc]",b=>b.onclick=()=>movSheet(null,{clase:"ingreso",moneda:"Bs"}));
   on("[data-mdel]",b=>b.onclick=e=>{e.stopPropagation();const x=S.movs.find(m=>m.id===b.dataset.mdel);if(x)removeWithUndo("movs",x.id,"Movimiento eliminado");});
   on("[data-skip]",b=>b.onclick=()=>{const [k,id]=b.dataset.skip.split("|");S.quincenas[k]=S.quincenas[k]||{};const sk=S.quincenas[k].skip=S.quincenas[k].skip||[];if(!sk.includes(id))sk.push(id);save();const y=window.scrollY;render();window.scrollTo(0,y);buzz();
     const g=S.gastos.find(z=>z.id===id);toast(`${g?g.concepto:"Gasto"} quitado de esta quincena`,()=>{S.quincenas[k].skip=S.quincenas[k].skip.filter(z=>z!==id);save();render();window.scrollTo(0,y);});});
@@ -971,6 +997,7 @@ function bind(){
   const g=id=>document.getElementById(id);
   if(g("exp"))g("exp").onclick=exportJSON; if(g("csv"))g("csv").onclick=exportCSV;
   ["imp","impW"].forEach(id=>{if(g(id))g(id).onchange=()=>importJSON(g(id).files[0]);});
+  if(g("startToday"))g("startToday").onclick=onboard;
   if(g("pinSet"))g("pinSet").onclick=setPin;
   if(g("pinOff"))g("pinOff").onclick=()=>pinPad("PIN actual",async p=>{if(await hash(p)!==S.config.pinHash)return false;S.config.pinHash="";save();render();toast("PIN quitado");return true;},{cancel:true});
   if(g("wipe"))g("wipe").onclick=()=>askConfirm("Borrar todos los datos","Se borra todo lo guardado en este teléfono. No se puede deshacer, así que exporta un respaldo antes.","Borrar todo",()=>{localStorage.removeItem(KEY);S=load();homeQ=null;curMonth=null;view="inicio";render();toast("Datos borrados");});
