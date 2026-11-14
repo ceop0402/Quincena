@@ -507,9 +507,9 @@ function vInicio(){
   ${recent.length?`<h2>Últimos movimientos</h2><div class="panel">${recent.map(movRow).join("")}<button class="btn ghost full" data-go="mes" style="margin-top:8px">Ver todo el mes</button></div>`:""}
   ${topes.length?`<h2>Topes del mes</h2><div class="panel">${topesH}</div>`:""}
   <h2>Ingresos y gastos, mes a mes</h2><div class="panel">${trendChart(R.months,mi)}</div>
-  <h2>Esta quincena</h2>
+  <h2>Quincena · pago del ${fmtD(rows[homeQ].cobro)}</h2>
   <section class="panel">
-   <div class="qtabs">${[homeQ-1,homeQ,homeQ+1].filter(i=>i>=0&&i<rows.length).map(i=>`<button data-hq="${i}" aria-pressed="${i===homeQ}">${fmtD(rows[i].cobro)}</button>`).join("")}</div>
+   <div class="qtabs">${[homeQ-1,homeQ,homeQ+1].filter(i=>i>=0&&i<rows.length).map(i=>`<button data-hq="${i}" aria-pressed="${i===homeQ}">Pago ${fmtD(rows[i].cobro)}</button>`).join("")}</div>
    ${qBox(q)}
    <div class="row" style="margin-top:10px"><span class="muted small">Para convertir a USDT</span><span class="money">${$m(q.sob)} BCV</span></div>
    ${base>0?`<div class="flow"><div class="kept" style="width:${kept/base*100}%">${$m(kept,false)} USDT</div><div class="lost" style="width:${lost/base*100}%"></div></div>`:`<div class="empty">Esta quincena no deja sobrante para convertir.</div>`}
@@ -543,8 +543,8 @@ function vMes(){
   const a=R.rows[curMonth*2], b=R.rows[curMonth*2+1], M=R.months[curMonth], t=todayStr();
   const card=r=>withRate(r.bcv,()=>{const ing=r.sueldo+r.agui+r.extraBs, gas=r.gastos+r.com+r.salBs, q=ing-gas, p=ing>0?Math.min(1,gas/ing):0, isNow=t>=r.desde&&t<=r.hasta;
     return `<button class="qcard" data-openq="${r.key}" aria-label="Abrir quincena ${r.q}">
-     <div class="h"><b>Quincena ${r.q}</b><span>${isNow?`<span class="badge now">Actual</span> `:""}${r.tasaCargada||r.real?`<span class="badge ok">✓ Cobro cargado</span>`:`<span class="badge">Cobro pendiente</span>`}</span></div>
-     <div class="small muted">Cobro: ${fmtDY(r.cobro)} · del ${fmtD(r.desde)} al ${fmtD(r.hasta)}${r.sueldoEdit?" · sueldo cambiado":""}</div>
+     <div class="h"><b>Quincena ${r.q}</b><span>${isNow?`<span class="badge now">Actual</span> `:""}${(S.quincenas[r.key]||{}).usdtReal?`<span class="badge ok">✓ Convertida</span>`:`<span class="badge">Sin convertir</span>`}</span></div>
+     <div class="small muted">Pago: <b>${fmtDY(r.cobro)}</b>${r.cobroMov?" (adelantado/movido)":""}${r.sueldoEdit?" · sueldo cambiado":""}</div>
      <div style="margin-top:10px" class="small muted">Te queda</div>
      <div class="big ${q<0?"neg":""}">${CURV==="VES"&&(r.bcv>0||r.ingBs)?"Bs "+nf.format(r.ingBs-r.gasBs):$usd(q)}</div><div class="alt">${CURV==="VES"&&(r.bcv>0||r.ingBs)?$usd(q):(r.bcv>0||r.ingBs?"Bs "+nf.format(r.ingBs-r.gasBs):"Sin tasa cargada")}</div>
      <div class="bar"><span style="width:${p*100}%;background:${p>.9?"var(--neg)":"var(--fix)"}"></span></div>
@@ -569,11 +569,13 @@ function vMes(){
 }
 function qDetail(r,R){return withRate(r.bcv,()=>{
   const M=R.months[curMonth], list=S.movs.filter(x=>x.fecha>=r.desde&&x.fecha<=r.hasta).sort((p,q)=>q.fecha.localeCompare(p.fecha));
-  return `<div class="dhead"><button class="back" data-closeq aria-label="Volver a ${MESESL[M.m-1]}">‹</button><h1>Quincena ${r.q} · ${MESESL[r.m-1]} ${r.y}<small>Cobro ${fmtDY(r.cobro)} · del ${fmtD(r.desde)} al ${fmtD(r.hasta)}</small></h1></div>
+  return `<div class="dhead"><button class="back" data-closeq aria-label="Volver a ${MESESL[M.m-1]}">‹</button><h1>Quincena ${r.q} · ${MESESL[r.m-1]} ${r.y}<small>Pago ${fmtDY(r.cobro)}</small></h1></div>
   <div class="panel lift">${qBox(r)}</div>
   <h2>Ingresos de la quincena</h2>
   <div class="panel">
    ${(()=>{const d=S.quincenas[r.key]||{}, mon=d.sueldoMon||"$";return `
+   <div class="field"><label for="cob-${r.key}">Fecha en que cobraste</label><input type="date" id="cob-${r.key}" data-q="${r.key}" data-f="cobro" value="${r.cobro}"></div>
+   <p class="small muted" style="margin:-2px 0 8px">${r.cobroMov?`Cobraste el ${fmtD(r.cobro)} (normal: ${fmtD(r.cobroDef)}). Los días de las quincenas se ajustaron solos.`:`Si te pagan antes (por ejemplo el 13 porque el 15 cae domingo), cámbiala aquí.`}</p>
    <div class="field"><label for="sue-${r.key}">Sueldo de esta quincena</label><input inputmode="decimal" id="sue-${r.key}" data-sq="${r.key}" data-sf="sueldo" value="${r.sueldoEdit?d.sueldo:""}" placeholder="${r.sueldoBase>0?nf.format(r.sueldoBase)+" $ (normal)":"Monto"}"></div>
    <div class="chips" role="group" aria-label="Moneda del sueldo">${["$","Bs"].map(m=>`<button class="chip" data-sm="${r.key}|${m}" aria-pressed="${mon===m}">${m}</button>`).join("")}</div>
    ${mon==="Bs"?`<div class="field"><label for="sut-${r.key}">Tasa BCV del día que cobraste (Bs por $)</label><input inputmode="decimal" id="sut-${r.key}" data-sq="${r.key}" data-sf="sueldoTasa" value="${d.sueldoTasa||""}" placeholder="Escribe la tasa"></div>`:""}
@@ -612,25 +614,26 @@ function qPanel(r){
    <li class="total"><span>Total${r.com>0?` (incluye ${$m(r.com)} de comisiones)`:""}</span><span class="money">${$m(r.gastos+r.com)}</span></li></ul>
    ${r.skipped.length?`<p class="small muted" style="margin:8px 0 4px">Quitados solo de esta quincena:</p>${r.skipped.map(g=>`<div class="row small" style="padding:4px 0"><span style="text-decoration:line-through">${esc(g.concepto)} ${$m(g.monto)}</span><button class="linkbtn" data-unskip="${r.key}|${g.id}">Restaurar</button></div>`).join("")}`:""}
    <p class="small muted" style="margin:8px 0 0">🗑 lo quita solo de esta quincena. Para borrarlo de todos los meses: Ajustes → Gastos fijos.</p></div>
-  <h2>Cobro y conversión</h2>
+  <h2>Conversión</h2>
   <div class="panel">
-   <div class="field"><label for="cob-${r.key}">Fecha de cobro</label><input type="date" id="cob-${r.key}" data-q="${r.key}" data-f="cobro" value="${r.cobro}"></div>
-   ${r.cobroMov?`<p class="small muted" style="margin:-2px 0 6px">Cambiaste la fecha (normal: ${fmtD(r.cobroDef)}). Los días de las quincenas se ajustan solos.</p>`:""}
+   <p class="small muted" style="margin-top:0">Lo que compraste con lo que te sobró de esta quincena. Sobrante para convertir: <b>${$usd(r.sob)}</b>${r.bcv>0?` (≈ Bs ${nf.format(r.sob*r.bcv)})`:""}.</p>
+   <div class="field"><label>¿Qué compraste?</label><div class="chips" role="group">${["USDT","USDC","Efectivo $"].map(v=>`<button class="chip" data-cq="${r.key}|compraMon|${v}" aria-pressed="${(d.compraMon||"USDT")===v}">${v}</button>`).join("")}</div></div>
+   <div class="field"><label>¿Dónde?</label><div class="chips" role="group">${["Binance","Kontigo","Efectivo","Otra"].map(v=>`<button class="chip" data-cq="${r.key}|via|${v}" aria-pressed="${d.via===v}">${v}</button>`).join("")}</div></div>
    <div class="grid2">
-    <div class="field"><label for="bcv-${r.key}">Tasa BCV</label><input inputmode="decimal" id="bcv-${r.key}" data-q="${r.key}" data-f="bcv" value="${d.bcv||""}" placeholder="${nf.format(r.bcv)}"></div>
-    <div class="field"><label for="buy-${r.key}">Tasa a la que compraste</label><input inputmode="decimal" id="buy-${r.key}" data-q="${r.key}" data-f="compra" value="${d.compra||""}" placeholder="${nf.format(r.buy)}"></div>
-    <div class="field"><label for="via-${r.key}">Vía</label><select id="via-${r.key}" data-q="${r.key}" data-f="via">${["","Binance","Kontigo","Otra"].map(v=>`<option ${d.via===v?"selected":""} value="${v}">${v||"—"}</option>`).join("")}</select></div>
-    <div class="field"><label for="usd-${r.key}">USDT que recibiste</label><input inputmode="decimal" id="usd-${r.key}" data-q="${r.key}" data-f="usdtReal" value="${d.usdtReal||""}" placeholder="${nf.format(r.convEst)}"></div>
+    <div class="field"><label for="buy-${r.key}">Tasa de compra (Bs por ${d.compraMon==="Efectivo $"?"$":(d.compraMon||"USDT")})</label><input inputmode="decimal" id="buy-${r.key}" data-q="${r.key}" data-f="compra" value="${d.compra||""}" placeholder="Escribe la tasa"></div>
+    <div class="field"><label for="usd-${r.key}">Cuánto recibiste</label><input inputmode="decimal" id="usd-${r.key}" data-q="${r.key}" data-f="usdtReal" value="${d.usdtReal||""}" placeholder="${r.buy>0?nf.format(r.convEst)+" (estimado)":"Monto"}"></div>
+    <div class="field"><label for="cfd-${r.key}">Fecha de la compra</label><input type="date" id="cfd-${r.key}" data-cd="${r.key}" value="${d.compraFecha||""}"></div>
    </div>
+   ${+d.compra>0&&+d.usdtReal>0?`<p class="small" style="margin:2px 0 6px">Pagaste ≈ <b>Bs ${nf.format(d.compra*d.usdtReal)}</b>${r.bcv>0?` · a tasa BCV eso eran ${$usd(d.compra*d.usdtReal/r.bcv)}`:""}.</p>`:""}
    <ul class="lines" style="margin-top:8px">
     <li><span>Sueldo${r.agui?" + aguinaldo":""}</span><span class="money">${$m(r.sueldo+r.agui)}</span></li>
     ${r.extraBs?`<li><span>Ingresos extra en Bs/$</span><span class="money">+${$m(r.extraBs)}</span></li>`:""}
     <li><span>Gastos fijos (con comisiones)</span><span class="money">−${$m(r.gastos+r.com)}</span></li>
     ${r.salBs?`<li><span>Salidas en Bs/$${r.comMov>0?" (incluye "+$m(r.comMov)+" de pago móvil)":""}</span><span class="money">−${$m(r.salBs)}</span></li>`:""}
     ${r.varEst>0?`<li><span class="muted">Gasto variable estimado</span><span class="money muted">−${$m(r.varEst)}</span></li>`:""}
-    <li class="total"><span>Sobrante</span><span class="money ${r.sob<0?"neg":""}">${$m(r.sob)} BCV</span></li>
-    <li><span>Pérdida por cambio (${pct(r.loss)})</span><span class="money" style="color:var(--loss)">−${$m(r.lossUsd)}</span></li>
-    <li><span>Convertido ${r.real?"(real)":"(estimado)"}</span><span class="money">${$m(r.conv)}</span></li>
+    <li class="total"><span>Sobrante para convertir</span><span class="money ${r.sob<0?"neg":""}">${$m(r.sob)}</span></li>
+    ${r.buy>0&&r.bcv>0?`<li><span>Pérdida por cambio (${pct(r.loss)})</span><span class="money" style="color:var(--loss)">−${$m(r.lossUsd)}</span></li>`:`<li><span class="muted">Pérdida por cambio: falta la tasa ${r.bcv>0?"de compra":"BCV del sueldo"}</span><span></span></li>`}
+    <li><span>${r.real?"Recibiste":"Recibirías (estimado)"} en ${(d.compraMon||"USDT")}</span><span class="money">${$m(r.conv)}</span></li>
     ${r.salUs?`<li><span>Salidas desde USDT</span><span class="money">−${$m(r.salUs)}</span></li>`:""}
     ${r.extraUs?`<li><span>Ingresos extra en USDT</span><span class="money">+${$m(r.extraUs)}</span></li>`:""}
     ${r.fees?`<li><span>Costo de transferencias</span><span class="money">−${$m(r.fees)}</span></li>`:""}
@@ -829,7 +832,7 @@ function vAjustes(){
    ${it("resp","💾","Respaldo",days==null?"⚠️ Nunca has hecho uno":`${days>14?"⚠️ ":""}Último hace ${days} ${days===1?"día":"días"}`)}
    ${it("pin","🔒","PIN",c.pinHash?"Activado":"Desactivado")}
   </div>
-  <p class="small muted" style="text-align:center;margin:14px 0">Ceop · versión 2.8</p>`;
+  <p class="small muted" style="text-align:center;margin:14px 0">Ceop · versión 2.9</p>`;
 }
 function gastoSheet(id){
   const x=id?S.gastos.find(g=>g.id===id):{id:uid(),concepto:"",tipo:"Fijo",q:1,monto:"",activo:true,desde:"",hasta:"",pm:false};
@@ -992,6 +995,8 @@ function bind(){
   on("[data-sq]",i=>i.addEventListener("change",()=>{const k=i.dataset.sq,f=i.dataset.sf;S.quincenas[k]=S.quincenas[k]||{};const v=i.value.trim();
     if(v==="")delete S.quincenas[k][f];else S.quincenas[k][f]=numIn(v);save();const y=window.scrollY;render();window.scrollTo(0,y);toast("Guardado");}));
   on("[data-sm]",b=>b.onclick=()=>{const [k,m]=b.dataset.sm.split("|");S.quincenas[k]=S.quincenas[k]||{};S.quincenas[k].sueldoMon=m;save();const y=window.scrollY;render();window.scrollTo(0,y);});
+  on("[data-cq]",b=>b.onclick=()=>{const [k,f,v]=b.dataset.cq.split("|");S.quincenas[k]=S.quincenas[k]||{};S.quincenas[k][f]=v;save();const y=window.scrollY;render();window.scrollTo(0,y);});
+  on("[data-cd]",i=>i.addEventListener("change",()=>{const k=i.dataset.cd;S.quincenas[k]=S.quincenas[k]||{};if(i.value)S.quincenas[k].compraFecha=i.value;else delete S.quincenas[k].compraFecha;save();toast("Guardado");}));
   on("[data-newinc]",b=>b.onclick=()=>movSheet(null,{clase:"ingreso",moneda:"Bs"}));
   on("[data-mdel]",b=>b.onclick=e=>{e.stopPropagation();const x=S.movs.find(m=>m.id===b.dataset.mdel);if(x)removeWithUndo("movs",x.id,"Movimiento eliminado");});
   on("[data-skip]",b=>b.onclick=()=>{const [k,id]=b.dataset.skip.split("|");S.quincenas[k]=S.quincenas[k]||{};const sk=S.quincenas[k].skip=S.quincenas[k].skip||[];if(!sk.includes(id))sk.push(id);save();const y=window.scrollY;render();window.scrollTo(0,y);buzz();
